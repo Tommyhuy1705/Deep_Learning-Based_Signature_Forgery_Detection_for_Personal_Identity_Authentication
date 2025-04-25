@@ -1,4 +1,4 @@
-# Deep_Learning-Based_Signature_Forgery_Detection_for_Personal_Identity_Authentication
+# Deep Learning-Based_Signature Forgery Detection for Personal Identity Authentication
 ## Introduction  
 
 Handwritten signature remains one of the most widely used biometric modalities for identity verification in various real-world applications, particularly in secure domains such as banking, legal document authentication, and personal identification. However, signature forgery — both skilled and unskilled — poses a significant threat to the reliability of such systems. Traditional approaches often struggle to generalize well across diverse writing styles and varying levels of forgery.
