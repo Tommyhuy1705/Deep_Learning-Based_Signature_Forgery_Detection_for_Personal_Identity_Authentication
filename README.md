@@ -1,7 +1,7 @@
 # Deep Learning-Based_Signature Forgery Detection for Personal Identity Authentication
 ## Introduction  
 
-Handwritten signature remains one of the most widely used biometric modalities for identity verification in various real-world applications, particularly in secure domains such as banking, legal document authentication, and personal identification. However, signature forgery — both skilled and unskilled — poses a significant threat to the reliability of such systems. Traditional approaches often struggle to generalize well across diverse writing styles and varying levels of forgery.
+Handwritten signature remains one of the most widely used biometric modalities for identity verification in various real-world applications, particularly in secure domains such as banking, legal document authentication, and personal identification. However, signature forgery both skilled and unskilled poses a significant threat to the reliability of such systems. Traditional approaches often struggle to generalize well across diverse writing styles and varying levels of forgery.
 This project explores deep learning-based approaches to address the problem of offline signature verification and forgery detection. Specifically, we investigate and compare three powerful models:
 
 - Siamese Network + Contrastive Loss + ResNet50: A pairwise metric learning model that learns to distinguish genuine and forged signatures by minimizing the distance between similar pairs and maximizing it for dissimilar ones.
