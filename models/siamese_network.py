@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from feature_extractor import ResNetFeatureExtractor
+from models.feature_extractor import ResNetFeatureExtractor
 
 class SiameseNetwork(nn.Module):
     def __init__(self,backbone_name, output_dim):

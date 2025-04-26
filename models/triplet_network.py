@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from feature_extractor import ResNetFeatureExtractor
+from models.feature_extractor import ResNetFeatureExtractor
 
 
 class TripletNetwork(nn.Module):
