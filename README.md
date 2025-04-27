@@ -6,7 +6,6 @@ This project explores deep learning-based approaches to address the problem of o
 
 - Siamese Network + Contrastive Loss + ResNet50: A pairwise metric learning model that learns to distinguish genuine and forged signatures by minimizing the distance between similar pairs and maximizing it for dissimilar ones.
 - Triplet Network + Triplet Loss + ResNet50: A relative distance learning framework that pushes genuine signature pairs closer while pushing forgeries further apart using anchor-positive-negative triplets.
-- ResNet50 + ArcFace Loss: A classification-based approach with angular margin loss that enhances the discriminative power of signature embeddings in high-dimensional space, inspired by state-of-the-art face recognition methods.
 
 All models are trained and tested on public benchmark datasets, and their performance is compared based on verification accuracy, forgery detection rate, generalization to unseen users, and embedding visualization.
 
