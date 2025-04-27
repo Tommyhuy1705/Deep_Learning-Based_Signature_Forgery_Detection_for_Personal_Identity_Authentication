@@ -1,0 +1,17 @@
+README.md
+setup.py
+configs/__init__.py
+datasets/__init__.py
+losses/__init__.py
+losses/contrastive_loss.py
+losses/triplet_loss.py
+models/__init__.py
+models/feature_extractor.py
+models/siamese_network.py
+models/triplet_network.py
+signature_verification.egg-info/PKG-INFO
+signature_verification.egg-info/SOURCES.txt
+signature_verification.egg-info/dependency_links.txt
+signature_verification.egg-info/top_level.txt
+utils/__init__.py
+utils/helpers.py

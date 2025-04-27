@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: signature_verification
+Version: 0.1.0
+Summary: A project for signature verification using Siamese/Triplet networks
+Author: Dong,Huy,Huong,Nhut,Thien
+Author-email: xxx.@gmail.com
+Requires-Python: >=3.8
