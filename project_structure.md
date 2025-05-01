@@ -9,12 +9,12 @@
 │   ├── contrastive_loss.py          # Hàm loss cho Siamese Network
 │
 ├── datasets/
-│   ├── triplet_dataset_loader.py           # Dataset class cho Triplet loader, load data cho train
-│   ├── siamese_dataset_loader.py           # Dataset class cho Siamese loader, load data cho train
+│   ├── triplet_dataloader.py           # Dataset class cho Triplet loader, load data cho train
+│   ├── siamese_dataloader.py           # Dataset class cho Siamese loader, load data cho train
 │
 ├── utils/
 │   ├── metrics.py                   # accuracy, distance, F1, ....
-│   ├── helpers.py                   # Hàm hỗ trợ cho việc train dễ hơn (ví dụ: load checkpoint, vísualize)
+│   ├── helpers.py                   # Hàm hỗ trợ cho việc train dễ hơn (ví dụ: load checkpoint, visualize)
 │
 ├── configs/
 │   ├── config_triplet.yaml          # File cấu hình riêng cho Triplet
