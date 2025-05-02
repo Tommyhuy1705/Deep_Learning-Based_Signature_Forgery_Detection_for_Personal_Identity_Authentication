@@ -32,7 +32,7 @@ class SiameseDataset(Dataset):
         
         print(f"Tổng số cặp ảnh: {len(self.pairs)}")
         print(f"Số cặp positive (1): {self.labels.count(1)}")
-        print(f"Số cặp negative (0): {self.labels.count(0)}")
+        print(f"Số cặp negative (0): {self.labels.count(0)}")   
     
     def _create_pairs(self):
         """Tạo các cặp positive và negative"""
@@ -41,11 +41,19 @@ class SiameseDataset(Dataset):
             forgery_user_path = os.path.join(self.forgeries_data_path, user)
             
             if not os.path.exists(original_user_path) or not os.path.exists(forgery_user_path):
+                #print(f"[WARN] Không tìm thấy thư mục giả mạo cho {user}, bỏ qua...")
                 continue
                 
             original_images = [f for f in os.listdir(original_user_path) if os.path.isfile(os.path.join(original_user_path, f))]
             forgery_images = [f for f in os.listdir(forgery_user_path) if os.path.isfile(os.path.join(forgery_user_path, f))]
             
+            # print(f"[INFO] User: {user} - Thật: {len(original_images)} ảnh, Giả: {len(forgery_images)} ảnh")
+
+            # # Nếu số ảnh không đủ thì skip
+            # if len(original_images) < 2 or len(forgery_images) == 0:
+            #     print(f"[WARN] Không đủ ảnh để tạo cặp cho {user}")
+            #     continue
+
             # Cặp positive (2 ảnh thật)
             for i in range(len(original_images)):
                 for j in range(i + 1, len(original_images)):
