@@ -1,4 +1,4 @@
-# Cấu hình cho Triplet
+# Cấu hình cho Siamese
 # Khi train nên load từ đây không nên tạo bên ngoài, chỉnh sửa thông số hay size gì cũng nên vào đâyđây
 
 model:
@@ -15,9 +15,9 @@ training:
 
 
 dataset:
-  train_data_path: ./data/triplet/train/ # Đổi ở đây để load dataset
-  val_data_path: ./data/triplet/val/  # Đổi ở đây để load dataset
-  input_size: (220,150)             # Kích thước ảnh đầu vào (resize), có lẽ dùng cv2, x= 220, y = 150
+  original_data_path: D:\Study\School\Phương pháp nghiên cứu\Deep_Learning-Based_Signature_Forgery_Detection_for_Personal_Identity_Authentication\data\full_org # Đổi ở đây để load dataset
+  forgeries_data_path: D:\Study\School\Phương pháp nghiên cứu\Deep_Learning-Based_Signature_Forgery_Detection_for_Personal_Identity_Authentication\data\full_forg # Đổi ở đây để load dataset
+  input_size: [220,150]             # Kích thước ảnh đầu vào (resize), có lẽ dùng cv2, x= 220, y = 150
 
 device: cuda                   # Sử dụng GPU (CUDA)
 
