@@ -4,7 +4,7 @@
 
 
 model:
-  backbone: resnet34            # Dùng ResNet
+  backbone: resnet18            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
 
 training:

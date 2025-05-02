@@ -12,6 +12,7 @@ models/triplet_network.py
 signature_verification.egg-info/PKG-INFO
 signature_verification.egg-info/SOURCES.txt
 signature_verification.egg-info/dependency_links.txt
+signature_verification.egg-info/requires.txt
 signature_verification.egg-info/top_level.txt
 utils/__init__.py
 utils/helpers.py

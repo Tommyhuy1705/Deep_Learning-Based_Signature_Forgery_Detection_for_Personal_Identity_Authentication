@@ -1,13 +1,13 @@
-
+import torch.nn.functional as F
 import torch
 
-def contrastiveLoss(y_true, dist, margin=1.0):
-    # Loss cho cặp giống nhau: y_true = 0 -> (dist)^2
-    positive_pair_loss = (1 - y_true) * torch.pow(dist, 2)
+class ContrastiveLoss(torch.nn.Module):
+    def __init__(self, margin=2.0):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
 
-    # Loss cho cặp không giống nhau: y_true = 1 -> max(0, margin - dist)^2
-    negative_pair_loss = y_true * torch.pow(torch.clamp(margin - dist, min=0.0), 2)
-
-    # Tính tổng Loss và trung bình
-    loss = torch.mean(positive_pair_loss + negative_pair_loss)
-    return loss
+    def forward(self, output1, output2, label):
+        euclidean_distance = F.pairwise_distance(output1, output2)
+        loss_contrastive = torch.mean((1-label) * torch.pow(euclidean_distance, 2) +
+                          (label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
+        return loss_contrastive
