@@ -2,7 +2,7 @@
 # Khi train nên load từ đây không nên tạo bên ngoài, chỉnh sửa thông số hay size gì cũng nên vào đâyđây
 
 model:
-  backbone: resnet34            # Dùng ResNet
+  backbone: resnet18            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
 
 training:
