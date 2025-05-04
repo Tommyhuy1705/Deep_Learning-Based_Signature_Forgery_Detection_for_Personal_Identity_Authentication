@@ -23,5 +23,4 @@ class ResNetFeatureExtractor(nn.Module):
 
     def forward(self, x):
         x = self.backbone(x)  # Output shape: (Batch, 512)
-        x = self.fc(x)        # Output shape: (Batch, output_dim=512)
         return x

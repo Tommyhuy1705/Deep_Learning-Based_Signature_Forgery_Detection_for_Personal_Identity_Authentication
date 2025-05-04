@@ -40,6 +40,22 @@ Follow the steps below to set up the project:
 
 ---
 
+## **Kaggle API Token Setup**
+
+To access and download datasets directly from Kaggle within this project, follow these steps to set up your Kaggle API token:
+
+1. Go to your [Kaggle account settings](https://www.kaggle.com/account).
+2. Scroll down to the **API** section.
+3. Click on **"Create New API Token"** – a file named `kaggle.json` will be downloaded.
+4. Place the `kaggle.json` file in the root directory of this project **or** in your system's default path:  
+   - Linux/macOS: `~/.kaggle/kaggle.json`  
+   - Windows: `C:\Users\<username>\.kaggle\kaggle.json`
+5. Make sure the file has appropriate permissions:  
+   ```bash
+   chmod 600 ~/.kaggle/kaggle.json
+
+---
+
 ## **Usage**
 ___
 
