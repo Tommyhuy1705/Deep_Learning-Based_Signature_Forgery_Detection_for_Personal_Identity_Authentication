@@ -4,8 +4,10 @@
 
 
 model:
+  name: triplet         # Tên model
   backbone: resnet18            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
+  kaggle_handle: giahuytranviet/triplet-verification-model/pyTorch/default
 
 training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
