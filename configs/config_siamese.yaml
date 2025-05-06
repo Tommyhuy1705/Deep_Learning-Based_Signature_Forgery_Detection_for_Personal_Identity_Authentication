@@ -11,7 +11,7 @@ training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
   learning_rate: 0.001         # Learning rate của optimizer
   optimizer: adam              # Optimizer sử dụng 
-  num_epochs: 50               # Số epoch train
+  num_epochs: 100               # Số epoch train
   margin: 0.5                  # Margin cho triplet loss (threshold)
   scheduler: cosine            # Thêm scheduler để giảm learning rate dần
 
