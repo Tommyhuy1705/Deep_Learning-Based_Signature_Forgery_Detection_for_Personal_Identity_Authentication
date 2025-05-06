@@ -36,7 +36,7 @@ def load_model(model_path,backbone,feature_dim, name_model):
         elif name_model == "siamese":
             model = SiameseNetwork(backbone, feature_dim)
             
-        checkpoint = torch.load(f"{model_path}/checkpoint_epoch_50.pth", map_location='cpu') 
+        checkpoint = torch.load(f"{model_path}/checkpoint_epoch_100.pth", map_location='cpu') 
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
         print("Model loaded successfully")

@@ -6,5 +6,6 @@ numpy
 matplotlib
 scikit-learn
 kaggle
+kagglehub
 ipywidgets
 Pillow

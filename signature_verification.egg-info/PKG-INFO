@@ -13,6 +13,7 @@ Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: scikit-learn
 Requires-Dist: kaggle
+Requires-Dist: kagglehub
 Requires-Dist: ipywidgets
 Requires-Dist: Pillow
 Dynamic: author
