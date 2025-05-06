@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: signature_verification
 Version: 0.1.0
 Summary: A project for signature verification using Siamese/Triplet networks
@@ -13,4 +13,11 @@ Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: scikit-learn
 Requires-Dist: kaggle
+Requires-Dist: kagglehub
 Requires-Dist: ipywidgets
+Requires-Dist: Pillow
+Dynamic: author
+Dynamic: author-email
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

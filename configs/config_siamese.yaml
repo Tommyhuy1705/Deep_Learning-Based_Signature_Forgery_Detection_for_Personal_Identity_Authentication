@@ -15,7 +15,6 @@ training:
   margin: 0.5                  # Margin cho triplet loss (threshold)
   scheduler: cosine            # Thêm scheduler để giảm learning rate dần
 
-
 dataset:
   original_data_path:  # Đổi ở đây để load dataset
   forgeries_data_path:  # Đổi ở đây để load dataset
