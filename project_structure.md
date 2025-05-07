@@ -20,9 +20,13 @@
 │   ├── config_triplet.yaml          # File cấu hình riêng cho Triplet
 │   ├── config_siamese.yaml          # File cấu hình riêng cho Siamese
 │
-├── notebooks/
+├── train_models/
 │   ├── train_triplet.ipynb          # Train Triplet
 │   ├── train_siamese.ipynb          # Train Siamese
+│
+├── test_models/
+│   ├── triplet_test.ipynb          # Test Triplet
+│   ├── siamese_test.ipynb          # Test Siamese
 │
 ├── README.md                        
 └── requirements.txt                 
