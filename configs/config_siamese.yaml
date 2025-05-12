@@ -2,21 +2,22 @@
 # Khi train nên load từ đây không nên tạo bên ngoài, chỉnh sửa thông số hay size gì cũng nên vào đâyđây
 
 model:
+  name: siamese                 # Tên model
   backbone: resnet34            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
+  kaggle_handle: giahuytranviet/siamese-verification-model/pyTorch/default
 
 training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
   learning_rate: 0.001         # Learning rate của optimizer
   optimizer: adam              # Optimizer sử dụng 
-  num_epochs: 50               # Số epoch train
+  num_epochs: 100               # Số epoch train
   margin: 0.5                  # Margin cho triplet loss (threshold)
   scheduler: cosine            # Thêm scheduler để giảm learning rate dần
 
-
 dataset:
-  original_data_path: D:\Study\School\Phương pháp nghiên cứu\signatures\full_org # Đổi ở đây để load dataset
-  forgeries_data_path: D:\Study\School\Phương pháp nghiên cứu\signatures\full_forg # Đổi ở đây để load dataset
+  original_data_path:  # Đổi ở đây để load dataset
+  forgeries_data_path:  # Đổi ở đây để load dataset
   input_size: [220,150]             # Kích thước ảnh đầu vào (resize), có lẽ dùng cv2, x= 220, y = 150
 
 device: cuda                   # Sử dụng GPU (CUDA)

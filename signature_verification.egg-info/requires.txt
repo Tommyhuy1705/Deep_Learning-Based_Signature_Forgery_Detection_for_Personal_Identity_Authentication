@@ -5,3 +5,7 @@ opencv-python
 numpy
 matplotlib
 scikit-learn
+kaggle
+kagglehub
+ipywidgets
+Pillow

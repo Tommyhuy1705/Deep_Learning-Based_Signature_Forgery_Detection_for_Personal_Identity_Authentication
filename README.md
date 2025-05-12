@@ -4,8 +4,8 @@
 Handwritten signature remains one of the most widely used biometric modalities for identity verification in various real-world applications, particularly in secure domains such as banking, legal document authentication, and personal identification. However, signature forgery both skilled and unskilled poses a significant threat to the reliability of such systems. Traditional approaches often struggle to generalize well across diverse writing styles and varying levels of forgery.
 This project explores deep learning-based approaches to address the problem of offline signature verification and forgery detection. Specifically, we investigate and compare three powerful models:
 
-- Siamese Network + Contrastive Loss + ResNet50: A pairwise metric learning model that learns to distinguish genuine and forged signatures by minimizing the distance between similar pairs and maximizing it for dissimilar ones.
-- Triplet Network + Triplet Loss + ResNet50: A relative distance learning framework that pushes genuine signature pairs closer while pushing forgeries further apart using anchor-positive-negative triplets.
+- Siamese Network + Contrastive Loss + ResNet34: A pairwise metric learning model that learns to distinguish genuine and forged signatures by minimizing the distance between similar pairs and maximizing it for dissimilar ones.
+- Triplet Network + Triplet Loss + ResNet34: A relative distance learning framework that pushes genuine signature pairs closer while pushing forgeries further apart using anchor-positive-negative triplets.
 
 All models are trained and tested on public benchmark datasets, and their performance is compared based on verification accuracy, forgery detection rate, generalization to unseen users, and embedding visualization.
 
@@ -37,6 +37,22 @@ Follow the steps below to set up the project:
    ```bash
    pip install -r requirements.txt
    ```
+
+---
+
+## **Kaggle API Token Setup**
+
+To access and download datasets directly from Kaggle within this project, follow these steps to set up your Kaggle API token:
+
+1. Go to your [Kaggle account settings](https://www.kaggle.com/account).
+2. Scroll down to the **API** section.
+3. Click on **"Create New API Token"** – a file named `kaggle.json` will be downloaded.
+4. Place the `kaggle.json` file in the root directory of this project **or** in your system's default path:  
+   - Linux/macOS: `~/.kaggle/kaggle.json`  
+   - Windows: `C:\Users\<username>\.kaggle\kaggle.json`
+5. Make sure the file has appropriate permissions:  
+   ```bash
+   chmod 600 ~/.kaggle/kaggle.json
 
 ---
 
