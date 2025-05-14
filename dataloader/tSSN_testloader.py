@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from PIL import Image
 
-class SiameseSignatureDataset(Dataset):
+class SignatureTestDataset(Dataset):
     def __init__(self, org_dir, forg_dir, transform=None):
         self.org_images = sorted([os.path.join(org_dir, f) for f in os.listdir(org_dir) if f.endswith('.png')])
         self.forg_images = sorted([os.path.join(forg_dir, f) for f in os.listdir(forg_dir) if f.endswith('.png')])

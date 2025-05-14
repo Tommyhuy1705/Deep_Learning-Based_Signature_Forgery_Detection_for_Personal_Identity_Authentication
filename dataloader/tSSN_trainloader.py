@@ -4,8 +4,7 @@ import random
 import os
 import numpy as np
 
-
-class TripletSignatureDataset(Dataset):
+class SignatureTrainDataset(Dataset):
     def __init__(self, org_dir, forg_dir, transform=None):
         self.org_images = sorted([os.path.join(org_dir, f) for f in os.listdir(org_dir) if f.endswith('.png')])
         self.forg_images = sorted([os.path.join(forg_dir, f) for f in os.listdir(forg_dir) if f.endswith('.png')])

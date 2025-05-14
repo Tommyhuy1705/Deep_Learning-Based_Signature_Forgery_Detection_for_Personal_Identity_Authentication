@@ -3,9 +3,9 @@ import torch.nn as nn
 from models.feature_extractor import ResNetFeatureExtractor
 
 
-class TripletNetwork(nn.Module):
+class tSSN(nn.Module):
     def __init__(self,backbone_name, output_dim):
-        super(TripletNetwork, self).__init__()
+        super(tSSN, self).__init__()
         self.feature_extractor = ResNetFeatureExtractor(backbone_name = backbone_name,output_dim = output_dim)
 
     def forward(self, anchor, positive, negative):
