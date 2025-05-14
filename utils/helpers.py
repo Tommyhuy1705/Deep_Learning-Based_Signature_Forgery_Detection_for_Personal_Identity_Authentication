@@ -27,19 +27,20 @@ def get_model_from_Kaggle(kaggle_handle):
     print(f"Model downloaded to {model_path}")
     return model_path
 
-def load_model(model_path,backbone,feature_dim, name_model):
-    # Load the model from the specified path
-    model = None
-    if os.path.exists(model_path):
-        model = tSSN(backbone_name=backbone, output_dim=feature_dim)
-            
-        checkpoint = torch.load(f"{model_path}/checkpoint_epoch_100.pth", map_location='cpu') 
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
-        print("Model loaded successfully")
-        print(f"Model loaded from {model_path}")
-    else:
-        raise FileNotFoundError(f"Model file not found at {model_path}")
+def load_model(model_path,backbone,feature_dim, params):
+    subfolder_name = f'tSSN_{params['mode']}_margin{params['margin']}'
+    model_file = os.path.join(model_path, subfolder_name, 'tSSN.pth')
+
+    if not os.path.exists(model_file):
+        raise FileNotFoundError(f"Không tìm thấy model ở {model_file}")
+
+    model = tSSN(backbone_name=backbone, output_dim=feature_dim)
+
+    checkpoint = torch.load(model_file, map_location='cpu')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+
+    print(f"Loaded model from {model_file}")
     return model
 
 def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn):
@@ -65,16 +66,22 @@ def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn):
 
     return avg_loss
 
-def save_model(model, dir, epoch, optimizer, avg_loss):
-
+def save_model(model, dir, epoch, optimizer, avg_loss, loss_params):
+    # Tạo tên subfolder theo mode và margin
+    subfolder_name = f'tSSN_{loss_params['mode']}_margin{loss_params['margin']}'
+    save_dir = os.path.join(dir, subfolder_name)
     os.makedirs(dir, exist_ok=True)
-    checkpoint_path = os.path.join(dir, f'tSSN.pth')
+
+
+    checkpoint_path = os.path.join(save_dir, f'tSSN.pth')
     model_state = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
     torch.save({
         'epoch': epoch,
         'model_state_dict': model_state,
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': avg_loss,
+        'mode': loss_params['mode'],
+        'margin': loss_params['margin'],
     }, checkpoint_path)
 
-    print(f"Checkpoint saved at {checkpoint_path}")
+    print(f"✅ Checkpoint saved at {checkpoint_path}")

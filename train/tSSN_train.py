@@ -57,7 +57,9 @@ print("LOAD CONFIG SUCCESSFULLY")
 
 # Create model
 model = tSSN(config['model']['backbone'], config['model']['feature_dim'])
-loss_fn = TripletLoss(margin=1, mode= "euclidean", input_dim=config['model']['feature_dim']) #mode : euclidean, cosine, manhattan, learnable
+
+loss_params = {'margin': 1, 'mode': "euclidean"} #mode : euclidean, cosine, manhattan, learnable
+loss_fn = TripletLoss(margin=loss_params['margin'], mode= loss_params['mode'], input_dim=config['model']['feature_dim']) 
 device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
 optimizer= optim.Adam(model.parameters(), lr=config['training']['learning_rate'])
 
@@ -80,4 +82,5 @@ save_model(model = model,
             dir = config['logging']['checkpoint_dir'],
             epoch = config['training']['num_epochs'],
             optimizer = optimizer,
-            avg_loss = avg_loss)
+            avg_loss = avg_loss,
+            loss_params=  loss_params,)
