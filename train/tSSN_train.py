@@ -1,7 +1,7 @@
 from utils.helpers import load_config, save_model, train_model
 from models.Triplet_Siamese_Similarity_Network import tSSN
 from losses.triplet_loss import TripletLoss
-from datasets.trainloader import SignatureTrainDataset
+from dataloader.tSSN_trainloader import SignatureTrainDataset
 
 import os
 import yaml
