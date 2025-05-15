@@ -82,9 +82,9 @@ def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn, ear
 
 def save_model(model, dir, epoch, optimizer, avg_loss, loss_params):
     # Tạo tên subfolder theo mode và margin
-    subfolder_name = f"tSSN_{loss_params['mode']}_margin{loss_params['margin']}"
-    save_dir = os.path.join(save_dir, subfolder_name)
-    os.makedirs(dir, exist_ok=True)
+    subfolder_name = f"tSSN_{loss_params['mode']}_{loss_params['margin']}"
+    save_dir = os.path.join(dir, subfolder_name)
+    os.makedirs(save_dir, exist_ok=True)
 
 
     checkpoint_path = os.path.join(save_dir, f'tSSN.pth')
