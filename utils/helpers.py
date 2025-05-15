@@ -43,7 +43,10 @@ def load_model(model_path,backbone,feature_dim, params):
     print(f"Loaded model from {model_file}")
     return model
 
-def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn):
+def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn, early_stop=None):
+    epochs_no_improve = 0
+    last_loss = None
+    
     for epoch in range(1, num_epochs + 1):
         model.train()
         running_loss = 0.0
@@ -64,6 +67,17 @@ def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn):
         avg_loss = running_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] - Loss: {avg_loss:.4f}")
 
+        if early_stop is not None:
+            if last_loss is not None and avg_loss >= last_loss:
+                epochs_no_improve += 1
+                if epochs_no_improve >= early_stop:
+                    print(f"Early stopping triggered at epoch {epoch}")
+                    break
+            else:
+                epochs_no_improve = 0
+
+            last_loss = avg_loss
+            
     return model, avg_loss
 
 def save_model(model, dir, epoch, optimizer, avg_loss, loss_params):
