@@ -64,7 +64,7 @@ def train_model(model, train_loader, optimizer, device, num_epochs, loss_fn):
         avg_loss = running_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] - Loss: {avg_loss:.4f}")
 
-    return avg_loss
+    return model, avg_loss
 
 def save_model(model, dir, epoch, optimizer, avg_loss, loss_params):
     # Tạo tên subfolder theo mode và margin
