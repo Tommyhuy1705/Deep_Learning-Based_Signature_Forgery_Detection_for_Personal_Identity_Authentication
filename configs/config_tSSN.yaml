@@ -4,14 +4,15 @@
 
 
 model:
-  name: triplet         # Tên model
+  name: tSSN        
   backbone: resnet34            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
-  kaggle_handle: giahuytranviet/triplet-verification-model/pyTorch/default
-
+  kaggle_handle: /giahuytranviet/tSSN-verification-model/pyTorch/default
+  
 training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
   learning_rate: 0.001         # Learning rate của optimizer
+  early_stop: 3
   optimizer: adam              # Optimizer sử dụng 
   num_epochs: 100               # Số epoch train
   margin: 0.5                  # Margin cho triplet loss (threshold)
