@@ -28,7 +28,7 @@ def get_model_from_Kaggle(kaggle_handle):
     return model_path
 
 def load_model(model_path,backbone,feature_dim, params):
-    subfolder_name = f'tSSN_{params['mode']}_margin{params['margin']}'
+    subfolder_name = f"tSSN_{params['mode']}_margin{params['margin']}"
     model_file = os.path.join(model_path, subfolder_name, 'tSSN.pth')
 
     if not os.path.exists(model_file):
