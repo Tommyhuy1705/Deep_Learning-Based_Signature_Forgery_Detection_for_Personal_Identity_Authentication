@@ -1,13 +1,11 @@
 # Cấu hình cho Triplet
 # Khi train nên load từ đây không nên tạo bên ngoài, chỉnh sửa thông số hay size gì cũng nên vào đâyđây
 
-
-
 model:
   name: tSSN        
   backbone: resnet34            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
-  kaggle_handle: /giahuytranviet/tSSN-verification-model/pyTorch/default
+  kaggle_handle: giahuytranviet/tSSN-verification-model/pyTorch/default/1
   
 training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
