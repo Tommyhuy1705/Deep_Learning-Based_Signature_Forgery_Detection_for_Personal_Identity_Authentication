@@ -111,8 +111,8 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
         train_subset = Subset(dataset, train_idx)
         val_subset = Subset(dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, num_workers=4, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_subset, num_workers=4, batch_size=batch_size, shuffle=False)
+        train_loader = DataLoader(train_subset, num_workers=6, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_subset, num_workers=6, batch_size=batch_size, shuffle=False)
 
         # Mỗi fold dùng model mới hoàn toàn
         device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
