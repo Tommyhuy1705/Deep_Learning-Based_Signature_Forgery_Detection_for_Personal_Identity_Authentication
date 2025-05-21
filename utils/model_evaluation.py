@@ -16,7 +16,7 @@ from sklearn.metrics import (
 from losses.triplet_loss import DistanceNet
 
 # Hàm tính khoảng cách dựa trên metric được chọn
-def calculate_distance(anchor_feat, test_feat, metric='euclidean',device='cuda'):
+def calculate_distance(anchor_feat, test_feat, metric='euclidean', device='cuda'):
     distance_net = DistanceNet(input_dim=512).to(device)
     if metric == 'euclidean':
         return F.pairwise_distance(anchor_feat, test_feat)
@@ -32,22 +32,34 @@ def calculate_distance(anchor_feat, test_feat, metric='euclidean',device='cuda')
         raise ValueError(f"Metric không được hỗ trợ: {metric}")
 
 # Hàm đánh giá mô hình
-def evaluate_model(model:tSSN, metric, dataloader:DataLoader, device):
+def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
     model.eval()
-    distances = []
-    labels = []
+    distances_list = []
+    labels_list = []
 
     with torch.no_grad():
-        for (img1, img2), label in tqdm(dataloader, desc=f'Evaluating with {metric}'):
-            img1, img2 = img1.to(device), img2.to(device)
-            emb1 = model.feature_extractor(img1)
-            emb2 = model.feature_extractor(img2)
-            dist = calculate_distance(emb1, emb2, metric)
-            distances.extend(dist.cpu().numpy())
-            labels.extend(label.numpy())
+        for (anchor, positive, negative) in tqdm(dataloader, desc=f'Evaluating with {metric}'):
+            # Chuyển dữ liệu sang device
+            anchor, positive, negative = anchor.to(device), positive.to(device), negative.to(device)
+            
+            # Trích xuất đặc trưng
+            emb_anchor = model.feature_extractor(anchor)
+            emb_positive = model.feature_extractor(positive)
+            emb_negative = model.feature_extractor(negative)
+            
+            # Tính khoảng cách
+            dist_ap = calculate_distance(emb_anchor, emb_positive, metric)  # anchor-positive
+            dist_an = calculate_distance(emb_anchor, emb_negative, metric)  # anchor-negative
+            
+            # Thu thập khoảng cách và nhãn
+            distances_list.extend(dist_ap.cpu().numpy().tolist())
+            labels_list.extend([1] * dist_ap.size(0))  # anchor-positive: giống nhau
+            distances_list.extend(dist_an.cpu().numpy().tolist())
+            labels_list.extend([0] * dist_an.size(0))  # anchor-negative: khác nhau
 
-    distances = np.array(distances)
-    labels = np.array(labels)
+    # Chuyển sang numpy array
+    distances = np.array(distances_list)
+    labels = np.array(labels_list)
 
     # Tìm ngưỡng tối ưu bằng ROC curve
     fpr, tpr, thresholds = roc_curve(labels, -distances)  # -distances vì nhỏ hơn nghĩa là giống hơn
