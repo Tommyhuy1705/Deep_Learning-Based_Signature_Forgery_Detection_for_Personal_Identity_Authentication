@@ -42,14 +42,12 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
             # Chuyển dữ liệu sang device
             anchor, positive, negative = anchor.to(device), positive.to(device), negative.to(device)
             
-            # Trích xuất đặc trưng
-            emb_anchor = model.feature_extractor(anchor)
-            emb_positive = model.feature_extractor(positive)
-            emb_negative = model.feature_extractor(negative)
+            # Trích xuất đặc trưng bằng phương thức forward
+            anchor_feat, positive_feat, negative_feat = model(anchor, positive, negative)
             
             # Tính khoảng cách
-            dist_ap = calculate_distance(emb_anchor, emb_positive, metric)  # anchor-positive
-            dist_an = calculate_distance(emb_anchor, emb_negative, metric)  # anchor-negative
+            dist_ap = calculate_distance(anchor_feat, positive_feat, metric)
+            dist_an = calculate_distance(anchor_feat, negative_feat, metric)
             
             # Thu thập khoảng cách và nhãn
             distances_list.extend(dist_ap.cpu().numpy().tolist())
@@ -62,9 +60,9 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
     labels = np.array(labels_list)
 
     # Tìm ngưỡng tối ưu bằng ROC curve
-    fpr, tpr, thresholds = roc_curve(labels, -distances)  # -distances vì nhỏ hơn nghĩa là giống hơn
+    fpr, tpr, thresholds = roc_curve(labels, -distances)
     optimal_idx = np.argmax(tpr - fpr)
-    optimal_threshold = -thresholds[optimal_idx]  # Chuyển lại dấu
+    optimal_threshold = -thresholds[optimal_idx]
 
     # Tính các chỉ số hiệu suất
     predictions = (distances <= optimal_threshold).astype(int)
