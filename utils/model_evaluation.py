@@ -114,23 +114,15 @@ def draw_plot_find_acc(results_dict):
 
 def draw_plot_evaluate(results, req=None):
     pd.set_option('display.width', 1000)
-    # Check if results is a single dictionary of metrics
-    if isinstance(results, dict) and all(isinstance(v, (int, float)) for v in results.values()):
-        # Single result: create DataFrame and display it
-        results_df = pd.DataFrame([results])
-        print('\nResults Table:')
-        print(results_df)
-        # No plotting for single result, or add a simple bar plot if desired
+    pd.set_option('display.width', 1000)
+    if isinstance(results, dict):
+        results_df = pd.DataFrame([results])  # Single result
+    elif isinstance(results, list):
+        results_df = pd.DataFrame(results)   # Multiple results
     else:
-        # Multiple results: process as originally intended
-        results_df = pd.DataFrame(results).T
-        results_df.index.name = 'Metric_Margin'
-        print('\nResults Table:')
-        print(results_df)
-        
-        # Split index into 'metric' and 'margin'
-        results_df['metric'] = results_df.index.str.split('_').str[0]
-        results_df['margin'] = results_df.index.str.split('_').str[1].astype(float)
+        raise ValueError("results must be a dictionary or a list of dictionaries")
+    print('\nResults Table:')
+    print(results_df)
 
     # Create the plot
     if req == 'acc':
