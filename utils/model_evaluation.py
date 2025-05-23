@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, 
-    f1_score, roc_curve, auc
+    f1_score, roc_curve, auc, precision_recall_curve, confusion_matrix
 )
 
 from losses.triplet_loss import DistanceNet
@@ -125,16 +125,56 @@ def draw_plot_evaluate(results, req=None):
     print(results_df)
 
     # Create the plot
-    # if req == 'acc':
-    #     draw_acc(results_df)
-    # elif req == "f1":
-    #     draw_f1(results_df)
-    # elif req == "roc-auc":
-    #     draw_roc_auc(results_df)
-    # elif req == "all":
-    #     draw_acc(results_df)
-    #     draw_f1(results_df)
-    #     draw_roc_auc(results_df)
+    if req == 'acc':
+        draw_acc(results_df)
+    elif req == "f1":
+        draw_f1(results_df)
+    elif req == "roc-auc":
+        draw_roc_auc(results_df)
+    elif req == "all":
+        if req == "all":
+            # Accuracy, Precision, Recall, F1
+            metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
+            values = [results_df['accuracy'].iloc[0], results_df['precision'].iloc[0],
+                    results_df['recall'].iloc[0], results_df['f1'].iloc[0]]
+            plt.figure(figsize=(8, 6))
+            plt.bar(metrics, values)
+            plt.ylim(0, 1)
+            plt.title('Các Chỉ Số Đánh Giá Mô Hình')
+            plt.show()
+            
+            # ROC Curve (giả sử có y_true và distances)
+            fpr, tpr, _ = roc_curve(results['y_true'], -results['distances'])
+            roc_auc_value = auc(fpr, tpr)
+            plt.figure(figsize=(8, 6))
+            plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {roc_auc_value:.4f})')
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('Đường Cong ROC')
+            plt.legend(loc='lower right')
+            plt.show()
+            
+            # Confusion Matrix
+            threshold = results_df['threshold'].iloc[0]
+            y_pred = [1 if d < threshold else 0 for d in results['distances']]
+            cm = confusion_matrix(results['y_true'], y_pred)
+            plt.figure(figsize=(6, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+            plt.xlabel('Dự Đoán')
+            plt.ylabel('Thực Tế')
+            plt.title('Ma Trận Nhầm Lẫn')
+            plt.show()
+            
+            # Precision-Recall Curve
+            precision, recall, _ = precision_recall_curve(results['y_true'], -results['distances'])
+            plt.figure(figsize=(8, 6))
+            plt.plot(recall, precision)
+            plt.xlabel('Recall')
+            plt.ylabel('Precision')
+            plt.title('Đường Cong Precision-Recall')
+            plt.show()
+
 
 
     def draw_acc(results_df):
@@ -146,6 +186,7 @@ def draw_plot_evaluate(results, req=None):
         plt.ylabel('Accuracy')
         plt.grid(True)  # Thêm lưới
         plt.show()
+        
 
     def draw_f1(results_df):
         """Vẽ biểu đồ so sánh F1-score"""
