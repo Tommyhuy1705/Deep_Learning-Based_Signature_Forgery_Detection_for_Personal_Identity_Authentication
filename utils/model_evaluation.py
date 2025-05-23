@@ -125,16 +125,16 @@ def draw_plot_evaluate(results, req=None):
     print(results_df)
 
     # Create the plot
-    if req == 'acc':
-        draw_acc(results_df)
-    elif req == "f1":
-        draw_f1(results_df)
-    elif req == "roc-auc":
-        draw_roc_auc(results_df)
-    elif req == "all":
-        draw_acc(results_df)
-        draw_f1(results_df)
-        draw_roc_auc(results_df)
+    # if req == 'acc':
+    #     draw_acc(results_df)
+    # elif req == "f1":
+    #     draw_f1(results_df)
+    # elif req == "roc-auc":
+    #     draw_roc_auc(results_df)
+    # elif req == "all":
+    #     draw_acc(results_df)
+    #     draw_f1(results_df)
+    #     draw_roc_auc(results_df)
 
 
     def draw_acc(results_df):
