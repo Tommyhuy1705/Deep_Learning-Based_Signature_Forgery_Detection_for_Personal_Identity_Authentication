@@ -31,7 +31,7 @@ def get_model_from_Kaggle(kaggle_handle):
     print(f"Model downloaded to {model_path}")
     return model_path
 
-def load_model(model_path,backbone,feature_dim, params):
+def load_model(model_path,backbone,feature_dim):
     #subfolder_name = f"tSSN_{params['mode']}_margin{params['margin']}"
     #model_file = os.path.join(model_path, subfolder_name, 'tSSN.pth')
     model_file = os.path.join(model_path, 'tSSN.pth')
