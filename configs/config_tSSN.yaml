@@ -5,7 +5,7 @@ model:
   name: tSSN        
   backbone: resnet34            # Dùng ResNet
   feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
-  kaggle_handle: giahuytranviet/tSSN-verification-model/pyTorch/default/1
+  kaggle_handle: giahuytranviet/tSSN-verification-model/pyTorch/default/3
   
 training:
   batch_size: 32               # Số lượng ảnh trong mỗi batch
