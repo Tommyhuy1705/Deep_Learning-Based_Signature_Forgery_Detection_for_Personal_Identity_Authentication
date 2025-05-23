@@ -114,8 +114,12 @@ def draw_plot_find_acc(results_dict):
 
 def draw_plot_evaluate(results, req=None):
     pd.set_option('display.width', 1000)
-    results_df = pd.DataFrame(results).T
-    results_df.index.name = 'Metric_Margin'
+    if isinstance(results, dict):
+        results_df = pd.DataFrame([results])  # Single result
+    elif isinstance(results, list):
+        results_df = pd.DataFrame(results)   # Multiple results
+    else:
+        raise ValueError("results must be a dictionary or a list of dictionaries")
     print('\nResults Table:')
     print(results_df)
 
