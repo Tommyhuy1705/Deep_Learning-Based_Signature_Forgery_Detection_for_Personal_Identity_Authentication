@@ -78,7 +78,9 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
         'recall': recall,
         'f1': f1,
         'roc_auc': roc_auc,
-        'threshold': optimal_threshold
+        'threshold': optimal_threshold,
+        'y_true': labels,
+        'distances': distances
     }
 
 # Hàm vẽ đồ thị tìm best accurracy
@@ -141,9 +143,10 @@ def draw_plot_evaluate(results, req=None):
             plt.bar(metrics, values)
             plt.ylim(0, 1)
             plt.title('Các Chỉ Số Đánh Giá Mô Hình')
+            plt.grid(True)  # Thêm lưới
             plt.show()
             
-            # ROC Curve (giả sử có y_true và distances)
+            # ROC Curve
             fpr, tpr, _ = roc_curve(results['y_true'], -results['distances'])
             roc_auc_value = auc(fpr, tpr)
             plt.figure(figsize=(8, 6))
@@ -153,6 +156,7 @@ def draw_plot_evaluate(results, req=None):
             plt.ylabel('True Positive Rate')
             plt.title('Đường Cong ROC')
             plt.legend(loc='lower right')
+            plt.grid(True)  # Thêm lưới
             plt.show()
             
             # Confusion Matrix
@@ -164,6 +168,7 @@ def draw_plot_evaluate(results, req=None):
             plt.xlabel('Dự Đoán')
             plt.ylabel('Thực Tế')
             plt.title('Ma Trận Nhầm Lẫn')
+            plt.grid(True)  # Thêm lưới
             plt.show()
             
             # Precision-Recall Curve
@@ -173,6 +178,7 @@ def draw_plot_evaluate(results, req=None):
             plt.xlabel('Recall')
             plt.ylabel('Precision')
             plt.title('Đường Cong Precision-Recall')
+            plt.grid(True)  # Thêm lưới
             plt.show()
 
 
