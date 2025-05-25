@@ -7,12 +7,10 @@ import numpy as np
 from tqdm import tqdm
 from models.Triplet_Siamese_Similarity_Network import tSSN
 from torch.utils.data import DataLoader
-
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, 
     f1_score, roc_curve, auc, precision_recall_curve, confusion_matrix
 )
-
 from losses.triplet_loss import DistanceNet
 
 # Hàm tính khoảng cách dựa trên metric được chọn
@@ -66,13 +64,41 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
 
     # Tính các chỉ số hiệu suất
     predictions = (distances <= optimal_threshold).astype(int)
+    
     accuracy = accuracy_score(labels, predictions)
     precision = precision_score(labels, predictions)
     recall = recall_score(labels, predictions)
     f1 = f1_score(labels, predictions)
     roc_auc = auc(fpr, tpr)
 
-    return {
+    # Tính FAR và FRR tại ngưỡng tối ưu
+    cm = confusion_matrix(labels, predictions)
+    tn, fp, fn, tp = cm.ravel()
+    far = fp / (fp + tn) if (fp + tn) > 0 else 0
+    frr = fn / (fn + tp) if (fn + tp) > 0 else 0
+
+    # Tính EER bằng cách phân tích FAR và FRR trên dải ngưỡng
+    min_dist, max_dist = np.min(distances), np.max(distances)
+    threshold_range = np.linspace(min_dist, max_dist, 100)
+    far_list, frr_list = [], []
+
+    for thresh in threshold_range:
+        preds = (distances <= thresh).astype(int)
+        cm = confusion_matrix(labels, preds)
+        tn, fp, fn, tp = cm.ravel()
+        far_val = fp / (fp + tn) if (fp + tn) > 0 else 0
+        frr_val = fn / (fn + tp) if (fn + tp) > 0 else 0
+        far_list.append(far_val)
+        frr_list.append(frr_val)
+
+    # Tìm EER
+    diff = np.abs(np.array(far_list) - np.array(frr_list))
+    eer_index = np.argmin(diff)
+    eer = (far_list[eer_index] + frr_list[eer_index]) / 2
+    eer_threshold = threshold_range[eer_index]
+
+    # Kết quả trả về
+    result = {
         'accuracy': accuracy,
         'precision': precision,
         'recall': recall,
@@ -80,8 +106,16 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
         'roc_auc': roc_auc,
         'threshold': optimal_threshold,
         'y_true': labels,
-        'distances': distances
+        'distances': distances,
+        'far': far,                # FAR tại ngưỡng tối ưu
+        'frr': frr,                # FRR tại ngưỡng tối ưu
+        'eer': eer,                # Equal Error Rate
+        'eer_threshold': eer_threshold,
+        'threshold_range': threshold_range,
+        'far_list': far_list,
+        'frr_list': frr_list
     }
+    return result
 
 # Hàm vẽ đồ thị tìm best accurracy
 def draw_plot_find_acc(results_dict):
@@ -124,109 +158,90 @@ def draw_plot_evaluate(results, req=None):
     else:
         raise ValueError("results must be a dictionary or a list of dictionaries")
     print('\nResults Table:')
-    print(results_df)
+    print(results_df.drop(columns=['y_true', 'distances', 'threshold_range', 'far_list', 'frr_list']))  # Loại bỏ cột dài
 
     # Create the plot
     if req == 'acc':
         draw_acc(results_df)
-    elif req == "f1":
-        draw_f1(results_df)
+    elif req == "cm":
+        draw_confusion_matrix(results_df, results)
     elif req == "roc-auc":
         draw_roc_auc(results_df)
+    elif req == "pre-recall":
+        draw_pre_recall(results)
+    elif req == "far-frr":
+        draw_far_frr(results)
     elif req == "all":
-        if req == "all":
-            # Accuracy, Precision, Recall, F1
-            metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-            values = [results_df['accuracy'].iloc[0], results_df['precision'].iloc[0],
-                    results_df['recall'].iloc[0], results_df['f1'].iloc[0]]
-            plt.figure(figsize=(8, 6))
-            plt.bar(metrics, values)
-            plt.ylim(0, 1)
-            plt.title('Các Chỉ Số Đánh Giá Mô Hình')
-            plt.grid(True)  # Thêm lưới
-            plt.show()
-            
-            # ROC Curve
-            fpr, tpr, _ = roc_curve(results['y_true'], -results['distances'])
-            roc_auc_value = auc(fpr, tpr)
-            plt.figure(figsize=(8, 6))
-            plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {roc_auc_value:.4f})')
-            plt.plot([0, 1], [0, 1], 'k--')
-            plt.xlabel('False Positive Rate')
-            plt.ylabel('True Positive Rate')
-            plt.title('Đường Cong ROC')
-            plt.legend(loc='lower right')
-            plt.grid(True)  # Thêm lưới
-            plt.show()
-            
-            # Confusion Matrix
-            threshold = results_df['threshold'].iloc[0]
-            y_pred = [1 if d < threshold else 0 for d in results['distances']]
-            cm = confusion_matrix(results['y_true'], y_pred)
-            plt.figure(figsize=(6, 6))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-            plt.xlabel('Dự Đoán')
-            plt.ylabel('Thực Tế')
-            plt.title('Ma Trận Nhầm Lẫn')
-            plt.grid(True)  # Thêm lưới
-            plt.show()
-            
-            # Precision-Recall Curve
-            precision, recall, _ = precision_recall_curve(results['y_true'], -results['distances'])
-            plt.figure(figsize=(8, 6))
-            plt.plot(recall, precision)
-            plt.xlabel('Recall')
-            plt.ylabel('Precision')
-            plt.title('Đường Cong Precision-Recall')
-            plt.grid(True)  # Thêm lưới
-            plt.show()
+        draw_acc(results_df)
+        draw_confusion_matrix(results_df, results)
+        draw_roc_auc(results)
+        draw_pre_recall(results)
+        draw_far_frr(results)
 
 
 
-    def draw_acc(results_df):
-        """"Vẽ biểu đồ so sánh Accuracy của từng Mode"""
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(data=results_df, x='margin', y='accuracy', hue='metric', marker='o')
-        plt.title('Accuracy vs Margin for each Metric')
-        plt.xlabel('Margin')
-        plt.ylabel('Accuracy')
-        plt.grid(True)  # Thêm lưới
-        plt.show()
-        
+def draw_acc(results_df):
+    # Accuracy, Precision, Recall, F1
+    metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
+    values = [results_df['accuracy'].iloc[0], results_df['precision'].iloc[0],
+            results_df['recall'].iloc[0], results_df['f1'].iloc[0]]
+    plt.figure(figsize=(8, 6))
+    plt.bar(metrics, values)
+    plt.ylim(0, 1)
+    plt.title('Các Chỉ Số Đánh Giá Mô Hình')
+    plt.grid(True)
+    plt.show()
+    
 
-    def draw_f1(results_df):
-        """Vẽ biểu đồ so sánh F1-score"""
-        plt.figure(figsize=(12, 6))
-        ax = sns.barplot(x=results_df.index, y='f1', data=results_df)
+def draw_confusion_matrix(results_df, results):
+    # Confusion Matrix
+    threshold = results_df['threshold'].iloc[0]
+    y_pred = [1 if d < threshold else 0 for d in results['distances']]
+    cm = confusion_matrix(results['y_true'], y_pred)
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.xlabel('Dự Đoán')
+    plt.ylabel('Thực Tế')
+    plt.title('Ma Trận Nhầm Lẫn')
+    plt.show()
 
-        # Thêm nhãn giá trị lên từng cột
-        for p in ax.patches:
-            ax.annotate(f"{p.get_height():.2f}", 
-                        (p.get_x() + p.get_width() / 2., p.get_height()),
-                        ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
+def draw_roc_auc(results):
+    # ROC Curve
+    fpr, tpr, _ = roc_curve(results['y_true'], -results['distances'])
+    roc_auc_value = auc(fpr, tpr)
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {roc_auc_value:.4f})')
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Đường Cong ROC')
+    plt.legend(loc='lower right')
+    plt.grid(True)
+    plt.show()
 
-        plt.xticks(rotation=45)
-        plt.title('F1-Score Comparison Across Metrics and Margins')
-        plt.xlabel('Metric_Margin')
-        plt.ylabel('F1-Score')
-        plt.tight_layout()
-        plt.show()
 
-    def draw_roc_auc(results_df):
-        """Vẽ biểu đồ so sánh ROC-AUC"""
-        plt.figure(figsize=(12, 6))
-        ax = sns.barplot(x=results_df.index, y='roc_auc', data=results_df)
+def draw_pre_recall(results):
+    # Precision-Recall Curve
+    precision, recall, _ = precision_recall_curve(results['y_true'], -results['distances'])
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall, precision)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Đường Cong Precision-Recall')
+    plt.grid(True)
+    plt.show()
 
-        # Thêm nhãn giá trị lên từng cột
-        for p in ax.patches:
-            ax.annotate(f"{p.get_height():.2f}", 
-                        (p.get_x() + p.get_width() / 2., p.get_height()),
-                        ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
 
-        plt.xticks(rotation=45)
-        plt.title('ROC-AUC Comparison Across Metrics and Margins')
-        plt.xlabel('Metric_Margin')
-        plt.ylabel('ROC-AUC')
-        plt.tight_layout()
-        plt.grid(True)  # Thêm lưới
-        plt.show()
+def draw_far_frr(results):
+    # FAR và FRR vs Threshold với EER
+    plt.figure(figsize=(8, 6))
+    plt.plot(results['threshold_range'], results['far_list'], label='FAR')
+    plt.plot(results['threshold_range'], results['frr_list'], label='FRR')
+    plt.axvline(x=results['eer_threshold'], color='r', linestyle='--', 
+                label=f'EER Threshold: {results["eer_threshold"]:.2f} (EER = {results["eer"]:.4f})')
+    plt.xlabel('Distance Threshold')
+    plt.ylabel('Error Rate')
+    plt.title('FAR và FRR vs Distance Threshold')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
