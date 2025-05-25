@@ -13,7 +13,7 @@ from sklearn.metrics import (
 )
 from losses.triplet_loss import DistanceNet
 
-# Hàm tính khoảng cách dựa trên metric được chọn
+# Function to calculate distance based on selected metric
 def calculate_distance(anchor_feat, test_feat, metric='euclidean', device='cuda'):
     distance_net = DistanceNet(input_dim=512).to(device)
     if metric == 'euclidean':
@@ -27,9 +27,9 @@ def calculate_distance(anchor_feat, test_feat, metric='euclidean', device='cuda'
     elif metric == 'learnable':
         return distance_net(anchor_feat, test_feat)
     else:
-        raise ValueError(f"Metric không được hỗ trợ: {metric}")
+        raise ValueError(f"Metrics not supported: {metric}")
 
-# Hàm đánh giá mô hình
+# Model evaluation function
 def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
     model.eval()
     distances_list = []
@@ -37,32 +37,32 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
 
     with torch.no_grad():
         for (anchor, positive, negative) in tqdm(dataloader, desc=f'Evaluating with {metric}'):
-            # Chuyển dữ liệu sang device
+            # Convert data to device and extract features
             anchor, positive, negative = anchor.to(device), positive.to(device), negative.to(device)
-            
-            # Trích xuất đặc trưng bằng phương thức forward
             anchor_feat, positive_feat, negative_feat = model(anchor, positive, negative)
             
-            # Tính khoảng cách
+            # Calculate distance
             dist_ap = calculate_distance(anchor_feat, positive_feat, metric)
             dist_an = calculate_distance(anchor_feat, negative_feat, metric)
             
-            # Thu thập khoảng cách và nhãn
+            # Collect distances and labels
+            # anchor-positive
             distances_list.extend(dist_ap.cpu().numpy().tolist())
-            labels_list.extend([1] * dist_ap.size(0))  # anchor-positive: giống nhau
+            labels_list.extend([1] * dist_ap.size(0))
+            # anchor-negative
             distances_list.extend(dist_an.cpu().numpy().tolist())
-            labels_list.extend([0] * dist_an.size(0))  # anchor-negative: khác nhau
+            labels_list.extend([0] * dist_an.size(0))
 
-    # Chuyển sang numpy array
+    # Convert to numpy array
     distances = np.array(distances_list)
     labels = np.array(labels_list)
 
-    # Tìm ngưỡng tối ưu bằng ROC curve
+    # Find the optimal threshold using ROC curve
     fpr, tpr, thresholds = roc_curve(labels, -distances)
     optimal_idx = np.argmax(tpr - fpr)
     optimal_threshold = -thresholds[optimal_idx]
 
-    # Tính các chỉ số hiệu suất
+    # Calculate performance indicators
     predictions = (distances <= optimal_threshold).astype(int)
     
     accuracy = accuracy_score(labels, predictions)
@@ -71,13 +71,13 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
     f1 = f1_score(labels, predictions)
     roc_auc = auc(fpr, tpr)
 
-    # Tính FAR và FRR tại ngưỡng tối ưu
+    # Calculate FAR and FRR at optimal threshold
     cm = confusion_matrix(labels, predictions)
     tn, fp, fn, tp = cm.ravel()
     far = fp / (fp + tn) if (fp + tn) > 0 else 0
     frr = fn / (fn + tp) if (fn + tp) > 0 else 0
 
-    # Tính EER bằng cách phân tích FAR và FRR trên dải ngưỡng
+    # Calculate EER (Equal Error Rate) by analyzing FAR and FRR over the threshold range
     min_dist, max_dist = np.min(distances), np.max(distances)
     threshold_range = np.linspace(min_dist, max_dist, 100)
     far_list, frr_list = [], []
@@ -91,13 +91,13 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
         far_list.append(far_val)
         frr_list.append(frr_val)
 
-    # Tìm EER
+    # Find EER (Equal Error Rate)
     diff = np.abs(np.array(far_list) - np.array(frr_list))
     eer_index = np.argmin(diff)
     eer = (far_list[eer_index] + frr_list[eer_index]) / 2
     eer_threshold = threshold_range[eer_index]
 
-    # Kết quả trả về
+    # Return results
     result = {
         'accuracy': accuracy,
         'precision': precision,
@@ -107,9 +107,9 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
         'threshold': optimal_threshold,
         'y_true': labels,
         'distances': distances,
-        'far': far,                # FAR tại ngưỡng tối ưu
-        'frr': frr,                # FRR tại ngưỡng tối ưu
-        'eer': eer,                # Equal Error Rate
+        'far': far,
+        'frr': frr,
+        'eer': eer,
         'eer_threshold': eer_threshold,
         'threshold_range': threshold_range,
         'far_list': far_list,
@@ -117,12 +117,11 @@ def evaluate_model(model: tSSN, metric, dataloader: DataLoader, device):
     }
     return result
 
-# Hàm vẽ đồ thị tìm best accurracy
+# Graph function to find best accuracy
 def draw_plot_find_acc(results_dict):
     keys = list(results_dict.keys())
     accuracies = [results_dict[k]['mean_acc'] for k in keys]
 
-    # Plot
     plt.figure(figsize=(12, 6))
     plt.plot(keys, accuracies, marker='o')
     plt.xticks(rotation=45, ha='right')
@@ -133,13 +132,12 @@ def draw_plot_find_acc(results_dict):
     plt.tight_layout()
     plt.show()
 
-    # Tìm best
     best_key = keys[accuracies.index(max(accuracies))]
     best_acc = max(accuracies)
 
     print(f"\nBest model: {best_key} | Mean Accuracy: {best_acc:.4f}")
 
-    # Tách key để lấy mode và margin
+    # Split key to get mode and margin
     if best_key == 'learnable':
         best_params = {'mode': 'learnable', 'margin': 0}
     else:
@@ -156,7 +154,7 @@ def draw_plot_evaluate(results, req=None):
     elif isinstance(results, list):
         results_df = pd.DataFrame(results)   # Multiple results
     else:
-        raise ValueError("results must be a dictionary or a list of dictionaries")
+        raise ValueError("Results must be a dictionary or a list of dictionaries")
     print('\nResults Table:')
     print(results_df.drop(columns=['y_true', 'distances', 'threshold_range', 'far_list', 'frr_list']))  # Loại bỏ cột dài
 
@@ -181,14 +179,30 @@ def draw_plot_evaluate(results, req=None):
 
 
 def draw_acc(results_df):
-    # Accuracy, Precision, Recall, F1
+    # List of metrics
     metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
+    
+    # Get values ​​from DataFrame
     values = [results_df['accuracy'].iloc[0], results_df['precision'].iloc[0],
-            results_df['recall'].iloc[0], results_df['f1'].iloc[0]]
+              results_df['recall'].iloc[0], results_df['f1'].iloc[0]]
+    
     plt.figure(figsize=(8, 6))
-    plt.bar(metrics, values)
-    plt.ylim(0, 1)
-    plt.title('Các Chỉ Số Đánh Giá Mô Hình')
+    bars = plt.bar(metrics, values, color='b')
+    
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.001, f'{yval:.4f}', ha='center', va='bottom', fontsize=10)
+    
+    min_val = min(values)
+    max_val = max(values)
+    padding = (max_val - min_val) * 0.2
+    if padding == 0:
+        padding = 0.01
+    plt.ylim(min_val - padding, max_val + padding)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.title('Model Evaluation Metrics')
+    plt.xlabel('Metric')
+    plt.ylabel('Value')
     plt.show()
     
 
@@ -199,9 +213,9 @@ def draw_confusion_matrix(results_df, results):
     cm = confusion_matrix(results['y_true'], y_pred)
     plt.figure(figsize=(6, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.xlabel('Dự Đoán')
-    plt.ylabel('Thực Tế')
-    plt.title('Ma Trận Nhầm Lẫn')
+    plt.xlabel('Prediction')
+    plt.ylabel('Reality')
+    plt.title('Confusion Matrix')
     plt.show()
 
 def draw_roc_auc(results):
@@ -213,7 +227,7 @@ def draw_roc_auc(results):
     plt.plot([0, 1], [0, 1], 'k--')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Đường Cong ROC')
+    plt.title('ROC Curve')
     plt.legend(loc='lower right')
     plt.grid(True)
     plt.show()
@@ -226,7 +240,7 @@ def draw_pre_recall(results):
     plt.plot(recall, precision)
     plt.xlabel('Recall')
     plt.ylabel('Precision')
-    plt.title('Đường Cong Precision-Recall')
+    plt.title('Precision-Recall Curve')
     plt.grid(True)
     plt.show()
 
