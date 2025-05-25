@@ -189,7 +189,6 @@ def draw_acc(results_df):
     plt.bar(metrics, values)
     plt.ylim(0, 1)
     plt.title('Các Chỉ Số Đánh Giá Mô Hình')
-    plt.grid(True)
     plt.show()
     
 
