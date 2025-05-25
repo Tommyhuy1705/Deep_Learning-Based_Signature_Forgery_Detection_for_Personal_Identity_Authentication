@@ -37,7 +37,7 @@ def load_model(model_path,backbone,feature_dim):
     model_file = os.path.join(model_path, 'tSSN.pth')
 
     if not os.path.exists(model_file):
-        raise FileNotFoundError(f"Không tìm thấy model ở {model_file}")
+        raise FileNotFoundError(f"Model not found at {model_file}")
 
     model = tSSN(backbone_name=backbone, output_dim=feature_dim)
 
@@ -86,7 +86,7 @@ def train_model(model:tSSN, train_loader:DataLoader, optimizer, device, num_epoc
     return model, avg_loss
 
 def save_model(model:tSSN, dir:str, optimizer, avg_loss, model_name:str):
-    # Tạo tên subfolder theo mode và margin
+    # Create subfolder name according to mode and margin
     save_dir = os.path.join(dir, model_name)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -115,7 +115,7 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
         train_loader = DataLoader(train_subset, num_workers=4, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, num_workers=4, batch_size=batch_size, shuffle=False)
 
-        # Mỗi fold dùng model mới hoàn toàn
+        # Each fold uses a completely new model
         device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
         model_fold = tSSN(config['model']['backbone'], config['model']['feature_dim']).to(device)
         loss_fn.to(device)
@@ -127,7 +127,7 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
 
         optimizer_fold = torch.optim.Adam(model_fold.parameters(), lr=config['training']['learning_rate'])
 
-        # Train fold hiện tại
+        # Current train fold
         model_fold, avg_train_loss = train_model(
             model=model_fold,
             train_loader=train_loader,
@@ -138,7 +138,7 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
             early_stop=early_stop
         )
 
-        # Validation fold hiện tại
+        # Current validation fold
         model_fold.eval()
         val_loss = 0.0
         correct = 0
@@ -149,11 +149,11 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
                 anchor, positive, negative = anchor.to(device), positive.to(device), negative.to(device)
                 a_feat, p_feat, n_feat = model_fold(anchor, positive, negative)
 
-                # Tính loss
+                # Calculate loss
                 loss = loss_fn(a_feat, p_feat, n_feat)
                 val_loss += loss.item()
 
-                # Tính accuracy: anchor gần positive hơn negative
+                # Calculate accuracy: anchor is closer to positive than negative
                 dist_ap = torch.norm(a_feat - p_feat, dim=1)
                 dist_an = torch.norm(a_feat - n_feat, dim=1)
                 correct += torch.sum(dist_ap < dist_an).item()
@@ -167,13 +167,13 @@ def train_model_kfold(config, loss_fn:TripletLoss, dataset, k_folds:int, batch_s
         loss_scores.append(avg_val_loss)
         acc_scores.append(accuracy)
 
-    # Đánh giá tổng thể
+    # Overall rating
     mean_acc = np.mean(acc_scores)
     std_acc = np.std(acc_scores)
     mean_loss = np.mean(loss_scores)
 
-    print("\n* Đánh giá tổng thể các folds:")
-    print(f"> Accuracy: {mean_acc:.12f} (Độ lệch +- {std_acc:.12f})")
+    print("\n* Overall rate of the folds:")
+    print(f"> Accuracy: {mean_acc:.12f} (Difference +- {std_acc:.12f})")
     print(f"> Loss: {mean_loss:.12f}")
 
     return mean_acc, mean_loss

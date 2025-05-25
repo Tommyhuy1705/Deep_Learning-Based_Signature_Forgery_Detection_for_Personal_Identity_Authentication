@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import random
 from PIL import Image
 
-#seed for reproducibility
+# Seed for reproducibility
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
@@ -24,12 +24,12 @@ torch.cuda.manual_seed_all(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# Transform chung
+# General Transform
 transform = transforms.Compose([
     transforms.Resize((220, 150)),
-    transforms.Grayscale(),  # Đảm bảo ảnh 1 kênh xám
+    transforms.Grayscale(),  # Ensure 1 channel grayscale image
     transforms.ToTensor(),
-    transforms.Lambda(lambda x: x.repeat(3, 1, 1)),  # 1 kênh -> 3 kênh
+    transforms.Lambda(lambda x: x.repeat(3, 1, 1)),  # 1 channel -> 3 channels
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
@@ -41,7 +41,7 @@ dataset = SignatureTrainDataset(
 
 train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-# Kiểm tra Triplet Dataset
+# Check Triplet Dataset
 print(f"Triplet Dataset - Total triplets: {len(dataset)}")
 
 anchor, positive, negative = dataset[0]
@@ -76,7 +76,7 @@ avg_loss = train_model( model = model,
                         optimizer= optimizer, 
                         device = device, 
                         num_epochs = config['training']['num_epochs'], 
-                        loss_fn=loss_fn)       #Sẽ train ra nhiều model với loss khác nhau
+                        loss_fn=loss_fn)       # Train many models with different losses
 
 save_model(model = model,
             dir = config['logging']['checkpoint_dir'],
