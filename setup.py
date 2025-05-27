@@ -10,7 +10,6 @@ setup(
     packages=find_packages(),       # Automatically find all packages (with __init__.py)
     install_requires=requirements,  # Use requirements.txt
     author='Dong,Huy,Huong,Nhut,Thien',
-    author_email='xxx.@gmail.com',
-    description='A project for signature verification using Siamese/Triplet networks',
+    description='A project for signature verification using Triplet Siamese Similarity Network',
     python_requires='>=3.8',        # Minimum Python version
 )

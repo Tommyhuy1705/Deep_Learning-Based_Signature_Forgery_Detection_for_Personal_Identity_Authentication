@@ -1,9 +1,8 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.1
 Name: signature_verification
 Version: 0.1.0
-Summary: A project for signature verification using Siamese/Triplet networks
+Summary: A project for signature verification using Triplet Siamese Similarity Network
 Author: Dong,Huy,Huong,Nhut,Thien
-Author-email: xxx.@gmail.com
 Requires-Python: >=3.8
 Requires-Dist: pyyaml
 Requires-Dist: torch
@@ -16,8 +15,3 @@ Requires-Dist: kaggle
 Requires-Dist: kagglehub
 Requires-Dist: ipywidgets
 Requires-Dist: Pillow
-Dynamic: author
-Dynamic: author-email
-Dynamic: requires-dist
-Dynamic: requires-python
-Dynamic: summary
