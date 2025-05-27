@@ -14,16 +14,16 @@ class SignatureTrainDataset(Dataset):
     def _create_triplets(self):
         triplets = []
 
-        # Tạo triplets với anchor là chữ ký thật
+        # Create triplets with anchor as genuine signature
         for anchor in self.org_images:
-            # Lấy base name (ví dụ: "10" từ "original_10_1.png")
+            # Extract base name (e.g., "10" from "original_10_1.png")
             base_name = os.path.basename(anchor).split('_')[1]
 
-            # Positive: chữ ký thật khác của cùng người
+            # Positive: another genuine signature from the same person
             positives = [img for img in self.org_images
                         if f"_{base_name}_" in img and img != anchor]
 
-            # Negative: chữ ký giả của cùng người hoặc chữ ký thật của người khác
+            # Negative: forged signature of the same person or genuine signature of another person
             forg_negatives = [img for img in self.forg_images if f"_{base_name}_" in img]
             other_negatives = [img for img in self.org_images if f"_{base_name}_" not in img]
             negatives = forg_negatives + other_negatives

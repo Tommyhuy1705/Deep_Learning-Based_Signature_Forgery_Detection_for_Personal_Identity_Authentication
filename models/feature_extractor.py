@@ -6,7 +6,7 @@ class ResNetFeatureExtractor(nn.Module):
     def __init__(self, backbone_name='resnet18', output_dim=512, pretrained=True):
         super().__init__()
 
-        assert backbone_name in ['resnet18', 'resnet34'], "Chỉ hỗ trợ resnet18 và resnet34"
+        assert backbone_name in ['resnet18', 'resnet34'], "Only resnet18 and resnet34 are supported"
 
         # Load ResNet
         if backbone_name == 'resnet18':
