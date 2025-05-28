@@ -4,12 +4,9 @@
 Handwritten signatures continue to serve as a widely accepted form of identity verification across domains such as banking, legal documentation, and governmental services. However, the increasing sophistication of forgery techniques presents serious challenges to the reliability of traditional verification systems, which are often rule-based or reliant on handcrafted features.
 
 To address these limitations, this project presents a deep learning-based framework for offline signature forgery detection, leveraging a Triplet Siamese Similarity Network (tSSN) trained with triplet loss. The proposed system integrates three key components:
-
-YOLOv10 for efficient signature localization from scanned document images.
-
-ResNet-34 as the feature extractor to generate robust, high-dimensional embeddings of signature images.
-
-Triplet Network with Triplet Loss to learn a discriminative embedding space that enforces minimal distance between genuine signature pairs and maximal distance from forgeries.
+- **YOLOv10**: efficient signature localization from scanned document images.
+- **ResNet-34**: the feature extractor to generate robust, high-dimensional embeddings of signature images.
+- **Triplet Network with Triplet Loss**: learn a discriminative embedding space that enforces minimal distance between genuine signature pairs and maximal distance from forgeries.
 
 A novel contribution of this work is the integration of multiple distance metrics—including Euclidean, Cosine, Manhattan, and a learnable distance function—to investigate how similarity definitions affect verification performance. Experimental results show that using Euclidean distance with a margin of 0.6 achieves the highest accuracy of 95.6439% on the CEDAR dataset, significantly outperforming previous benchmarks.
 
@@ -18,7 +15,17 @@ The system is trained using balanced batch sampling, enabling dynamic constructi
 This project offers a scalable, accurate, and generalizable solution for signature-based identity authentication, with direct applicability in high-security environments such as banking, finance, and legal processes.
 
 ## **Features**
-___
+- Offline signature forgery detection based on deep metric learning.
+- Signature region localization using YOLOv10.
+- Embedding extraction via ResNet-34 backbone.
+- Metric learning with Triplet Loss using four distance modes:
+ - **Euclidean distance**
+ - **Cosine distance**
+ - **Manhattan distance**
+ - **Learnable distance**
+- Evaluation with accuracy, ROC-AUC, EER, precision, recall.
+- Experimental margin tuning: [0.2, 0.4, 0.6, 0.8, 1.0].
+- Balanced batch sampling for consistent triplet generation.
 
 ---
 
@@ -62,8 +69,14 @@ To access and download datasets directly from Kaggle within this project, follow
 ---
 
 ## **Usage**
-___
-
+- To train and evaluate the model, follow these steps:
+**Step 1: Configure training parameters**
+```Edit the config.yaml file under configs/ to set:
+- Model backbone (ResNet34)
+- Feature embedding dimension
+- Margin value and distance mode (euclidean, cosine, etc.)
+- Batch size, learning rate, number of epochs
+```
 ---
 
 ## **Results**
