@@ -1,16 +1,21 @@
 # Deep Learning-Based_Signature Forgery Detection for Personal Identity Authentication
 ## Introduction  
 
-Handwritten signature remains one of the most widely used biometric modalities for identity verification in various real-world applications, particularly in secure domains such as banking, legal document authentication, and personal identification. However, signature forgery both skilled and unskilled poses a significant threat to the reliability of such systems. Traditional approaches often struggle to generalize well across diverse writing styles and varying levels of forgery.
-This project explores deep learning-based approaches to address the problem of offline signature verification and forgery detection. Specifically, we investigate and compare three powerful models:
+Handwritten signatures continue to serve as a widely accepted form of identity verification across domains such as banking, legal documentation, and governmental services. However, the increasing sophistication of forgery techniques presents serious challenges to the reliability of traditional verification systems, which are often rule-based or reliant on handcrafted features.
 
-- Siamese Network + Contrastive Loss + ResNet34: A pairwise metric learning model that learns to distinguish genuine and forged signatures by minimizing the distance between similar pairs and maximizing it for dissimilar ones.
-- Triplet Network + Triplet Loss + ResNet34: A relative distance learning framework that pushes genuine signature pairs closer while pushing forgeries further apart using anchor-positive-negative triplets.
+To address these limitations, this project presents a deep learning-based framework for offline signature forgery detection, leveraging a Triplet Siamese Similarity Network (tSSN) trained with triplet loss. The proposed system integrates three key components:
 
-All models are trained and tested on public benchmark datasets, and their performance is compared based on verification accuracy, forgery detection rate, generalization to unseen users, and embedding visualization.
+YOLOv10 for efficient signature localization from scanned document images.
 
-The goal of this research is to develop robust, scalable, and intelligent verification systems that can be reliably deployed in real-world identity authentication workflows, minimizing the risk of signature-based fraud.
----
+ResNet-34 as the feature extractor to generate robust, high-dimensional embeddings of signature images.
+
+Triplet Network with Triplet Loss to learn a discriminative embedding space that enforces minimal distance between genuine signature pairs and maximal distance from forgeries.
+
+A novel contribution of this work is the integration of multiple distance metrics—including Euclidean, Cosine, Manhattan, and a learnable distance function—to investigate how similarity definitions affect verification performance. Experimental results show that using Euclidean distance with a margin of 0.6 achieves the highest accuracy of 95.6439% on the CEDAR dataset, significantly outperforming previous benchmarks.
+
+The system is trained using balanced batch sampling, enabling dynamic construction of hard and semi-hard triplets during training and improving model generalization across diverse handwriting styles. Evaluation metrics include accuracy, precision, recall, ROC-AUC, FAR, FRR, and EER.
+
+This project offers a scalable, accurate, and generalizable solution for signature-based identity authentication, with direct applicability in high-security environments such as banking, finance, and legal processes.
 
 ## **Features**
 ___
@@ -63,7 +68,7 @@ ___
 
 ## **Results**
 ### Key Findings:
-1. **Mean Shift Clustering**:
+1. ****:
 
 ___
  
