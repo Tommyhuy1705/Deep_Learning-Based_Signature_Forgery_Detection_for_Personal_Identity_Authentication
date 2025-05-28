@@ -19,10 +19,10 @@ This project offers a scalable, accurate, and generalizable solution for signatu
 - Signature region localization using YOLOv10.
 - Embedding extraction via ResNet-34 backbone.
 - Metric learning with Triplet Loss using four distance modes:
- - **Euclidean distance**
- - **Cosine distance**
- - **Manhattan distance**
- - **Learnable distance**
+  - **Euclidean distance**
+  - **Cosine distance**
+  - **Manhattan distance**
+  - **Learnable distance**
 - Evaluation with accuracy, ROC-AUC, EER, precision, recall.
 - Experimental margin tuning: [0.2, 0.4, 0.6, 0.8, 1.0].
 - Balanced batch sampling for consistent triplet generation.
