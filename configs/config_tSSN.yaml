@@ -1,32 +1,30 @@
-# Cấu hình cho Triplet
-# Khi train nên load từ đây không nên tạo bên ngoài, chỉnh sửa thông số hay size gì cũng nên vào đâyđây
-
-
+# Configuration for Triplet
+# When training, it should be loaded from here, not created outside, editing parameters or sizes should also go here
 
 model:
   name: tSSN        
-  backbone: resnet34            # Dùng ResNet
-  feature_dim: 512              # Số chiều của vector đặc trưng đầu ra từ ResNet, muốn nhanh hơn thì giảm xuống
-  kaggle_handle: /giahuytranviet/tSSN-verification-model/pyTorch/default
+  backbone: resnet34           # Use ResNet
+  feature_dim: 512             # The dimensionality of the output feature vector from ResNet, if you want it to be faster, reduce it.
+  kaggle_handle: giahuytranviet/tSSN-verification-model/pyTorch/default/3
   
 training:
-  batch_size: 32               # Số lượng ảnh trong mỗi batch
-  learning_rate: 0.001         # Learning rate của optimizer
+  batch_size: 32               # Number of images in each batch
+  learning_rate: 0.001         # Optimizer learning rate
   early_stop: 3
-  optimizer: adam              # Optimizer sử dụng 
-  num_epochs: 100               # Số epoch train
+  optimizer: adam              # Optimizer usage
+  num_epochs: 100              # Number of train epochs
   margin: 0.5                  # Margin cho triplet loss (threshold)
-  scheduler: cosine            # Thêm scheduler để giảm learning rate dần
+  scheduler: cosine            # Add scheduler to gradually reduce learning rate
 
 
 dataset:
-  train_data_path: ./data/triplet/train/ # Đổi ở đây để load dataset
-  val_data_path: ./data/triplet/val/  # Đổi ở đây để load dataset
-  input_size: (220,150)             # Kích thước ảnh đầu vào (resize), có lẽ dùng cv2, x= 220, y = 150
+  train_data_path: ./data/triplet/train/ # Change here to load dataset
+  val_data_path: ./data/triplet/val/     # Change here to load dataset
+  input_size: (220,150)                  # Input image size (resize), probably use cv2, x= 220, y = 150
 
-device: cuda                   # Sử dụng GPU (CUDA)
+device: cuda                             # Use GPU (CUDA)
 
 logging:
-  log_dir: ./logs/              # Thêm thư mục lưu log
-  checkpoint_dir: ./checkpoints/ # Thêm thư mục lưu model checkpoint
-  save_freq: 5                  # Lưu checkpoint mỗi 5 epoch
+  log_dir: ./logs/                       # Add log folder
+  checkpoint_dir: ./checkpoints/         # Add checkpoint model storage folder
+  save_freq: 5                           # Save checkpoint every 5 epochs

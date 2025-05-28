@@ -1,16 +1,15 @@
 README.md
 setup.py
 configs/__init__.py
-datasets/__init__.py
-datasets/siamese_dataloader.py
-datasets/triplet_dataloader.py
+dataloader/__init__.py
+dataloader/tSSN_testloader.py
+dataloader/tSSN_trainloader.py
+dataloader/yolo_trainloader.py
 losses/__init__.py
-losses/contrastive_loss.py
 losses/triplet_loss.py
+models/Triplet_Siamese_Similarity_Network.py
 models/__init__.py
 models/feature_extractor.py
-models/siamese_network.py
-models/triplet_network.py
 signature_verification.egg-info/PKG-INFO
 signature_verification.egg-info/SOURCES.txt
 signature_verification.egg-info/dependency_links.txt
@@ -18,3 +17,4 @@ signature_verification.egg-info/requires.txt
 signature_verification.egg-info/top_level.txt
 utils/__init__.py
 utils/helpers.py
+utils/model_evaluation.py

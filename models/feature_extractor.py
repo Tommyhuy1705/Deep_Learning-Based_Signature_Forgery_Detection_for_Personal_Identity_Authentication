@@ -6,20 +6,20 @@ class ResNetFeatureExtractor(nn.Module):
     def __init__(self, backbone_name='resnet18', output_dim=512, pretrained=True):
         super().__init__()
 
-        assert backbone_name in ['resnet18', 'resnet34'], "Chỉ hỗ trợ resnet18 và resnet34"
+        assert backbone_name in ['resnet18', 'resnet34'], "Only resnet18 and resnet34 are supported"
 
         # Load ResNet
         if backbone_name == 'resnet18':
             resnet = models.resnet18(pretrained=pretrained)
-        else:  # resnet34
+        else:  # Resnet34
             resnet = models.resnet34(pretrained=pretrained)
 
-        # Xóa lớp Fully Connected do chỉ cần feature vector
+        # Delete Fully Connected layer since only feature vector is needed
         resnet.fc = nn.Identity()
 
         self.backbone = resnet
         if output_dim != 512:
-            self.fc = nn.Linear(512, output_dim)  # vì resnet18 và resnet34 đều out 512 chỉnh nếu mong muốn đầu ra khác
+            self.fc = nn.Linear(512, output_dim)  # Because resnet18 and resnet34 both output 512, adjust if different output is desired
 
     def forward(self, x):
         x = self.backbone(x)  # Output shape: (Batch, 512)

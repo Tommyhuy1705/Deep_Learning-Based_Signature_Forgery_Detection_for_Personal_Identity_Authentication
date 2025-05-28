@@ -2,7 +2,7 @@ from torch.nn import functional as F
 import torch
 
 class DistanceNet(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim=128):
+    def __init__(self, input_dim, hidden_dim=256):
         super(DistanceNet, self).__init__()
         self.model = torch.nn.Sequential(
             torch.nn.Linear(input_dim * 2, hidden_dim),
@@ -11,9 +11,9 @@ class DistanceNet(torch.nn.Module):
         )
 
     def forward(self, x1, x2):
-        # Nối 2 vector đầu vào
         x = torch.cat([x1, x2], dim=1)
-        return self.model(x).squeeze(1)  # đầu ra là khoảng cách (scalar)
+        return self.model(x).squeeze(1) 
+
 class TripletLoss(torch.nn.Module):
     def __init__(self, margin=1.0, mode='euclidean', input_dim = None, hidden_dim=256):
         super(TripletLoss, self).__init__()
