@@ -31,7 +31,42 @@ This project offers a scalable, accurate, and generalizable solution for signatu
 
 ## Project Structure  
 ```plaintext
-___
+├── configs/                         # Configuration files
+│   ├── __init__.py
+│   └── config_tSSN.yaml             # Model and training hyperparameters
+│
+├── dataloader/                     # Custom data loading and triplet construction
+│   ├── __init__.py
+│   └── tSSN_trainloader.py         # Triplet loader and balanced batch sampler
+│
+├── losses/                         # Triplet loss and metric logic
+│   ├── __init__.py
+│   └── triplet_loss.py             # Supports Euclidean, Cosine, Manhattan, Learnable
+│
+├── models/                         # Model definitions
+│   ├── __init__.py
+│   ├── Triplet_Siamese_Similarity_Network.py  # Main tSSN architecture
+│   └── feature_extractor.py        # ResNet-34 embedding extractor
+│
+├── notebooks/                      # Jupyter notebooks for development and visualization
+│   ├── final_evaluation.ipynb
+│   ├── model_training.ipynb
+│   └── yolov10-bcsd_training.ipynb
+│
+├── utils/                          # Helper scripts and evaluation tools
+│   ├── __init__.py
+│   ├── helpers.py                  # Miscellaneous utilities
+│   └── model_evaluation.py         # ROC, accuracy, precision, etc.
+│
+├── README.md                       # Project documentation
+├── requirements.txt                # Python dependencies
+├── setup.py                        # Installation setup (optional for packaging)
+├── signature_verification.egg-info/  # Build metadata (auto-generated)
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   ├── dependency_links.txt
+│   ├── requires.txt
+│   └── top_level.txt
 ```
 
 ---
@@ -71,29 +106,60 @@ To access and download datasets directly from Kaggle within this project, follow
 ## **Usage**
 - To train and evaluate the model, follow these steps:
 **Step 1: Configure training parameters**
-```Edit the config.yaml file under configs/ to set:
-- Model backbone (ResNet34)
-- Feature embedding dimension
-- Margin value and distance mode (euclidean, cosine, etc.)
-- Batch size, learning rate, number of epochs
-```
+  ```Edit the config.yaml file under configs/ to set:
+     Model backbone (ResNet34)
+     Feature embedding dimension
+     Margin value and distance mode (euclidean, cosine, etc.)
+     Batch size, learning rate, number of epochs
+  ```
+**Step 2: Localize signatures using YOLOv10**
+  ```Run the notebook:
+     notebooks/yolov10-bcsd_training.ipynb
+  ```
+**Step 3: Train the model**
+  ```Run the notebook:
+     notebooks/model_training.ipynb
+  ```
+**Step 4: Evaluate performance**
+  ```Open and run the notebook:
+     notebooks/final_evaluation.ipynb
+  ```
 ---
 
 ## **Results**
 ### Key Findings:
-1. ****:
+1. **Best-performing configuration:**
+- Triplet Network with Euclidean distance and margin = 0.6
+- Accuracy: 95.6439% on CEDAR dataset
+2. Learnable distance function showed potential but did not outperform fixed metrics.
+3. Balanced batch sampling improved generalization across user styles.
+4. Embedding visualizations show clear separation between genuine and forged signatures.
 
 ___
  
 ---
 
 ## **Contributions**
-___
+
+- Designed and implemented the full pipeline for offline signature verification using a Triplet Siamese Network (tSSN).
+- Integrated YOLOv10 for efficient signature region localization from scanned documents.
+- Developed flexible Triplet Loss module supporting multiple distance metrics: Euclidean, Cosine, Manhattan, and Learnable.
+- Implemented a balanced batch sampler to improve triplet selection and training stability.
+- Conducted extensive experiments with margin tuning and distance metric variations.
+- Achieved 95.6439% accuracy on the CEDAR dataset using Euclidean distance with margin = 0.6.
+- Visualized performance through ROC curves, precision-recall metrics, and embedding space analysis.
+- Structured the project for reproducibility and scalability, using modular PyTorch components and well-documented notebooks.
+- Prepared supporting materials including dataset configuration, training logs, and evaluation tools.
 
 ---
 
 ## **Future Work**
-___
+- Cross-dataset evaluation on GPDS, BHSig260 for generalizability.
+- Integrate lighter backbones (e.g., MobileNet) for real-time performance.
+- Incorporate attention mechanisms for enhanced local feature focus.
+- Explore adaptive or learnable margin strategies.
+- Apply to multilingual and multicultural signature styles.
+- Introduce explainable AI components for visualizing decision-making process.
 
 ---
 
