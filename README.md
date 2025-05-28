@@ -104,26 +104,34 @@ To access and download datasets directly from Kaggle within this project, follow
 ---
 
 ## **Usage**
-- To train and evaluate the model, follow these steps:
-**Step 1: Configure training parameters**
-  ```Edit the config.yaml file under configs/ to set:
-     Model backbone (ResNet34)
-     Feature embedding dimension
-     Margin value and distance mode (euclidean, cosine, etc.)
-     Batch size, learning rate, number of epochs
-  ```
-**Step 2: Localize signatures using YOLOv10**
-  ```Run the notebook:
-     notebooks/yolov10-bcsd_training.ipynb
-  ```
-**Step 3: Train the model**
-  ```Run the notebook:
-     notebooks/model_training.ipynb
-  ```
-**Step 4: Evaluate performance**
-  ```Open and run the notebook:
-     notebooks/final_evaluation.ipynb
-  ```
+**- To train, evaluate, and analyze the Triplet Siamese Signature Network (tSSN), follow the steps below:**
+1. **Prepare your input dataset:**
+- Place raw document images into a folder `(e.g. data/raw_documents/)` if you're using YOLO for signature localization.
+2. **Localize signature regions using YOLOv10:**
+- Open and run the notebook `notebooks/yolov10-bcsd_training.ipynb`.
+- This will detect and crop the signature regions from input documents and save them into a designated output directory `(e.g. data/signatures/)`.
+3. **Configure model settings and experiment parameters:**
+- Open `configs/config_tSSN.yaml`.
+- Modify parameters as needed:
+  - `distance_mode: choose from euclidean, cosine, manhattan, learnable`
+  - `margin: set values like 0.2, 0.4, ..., 1.0`
+  - `feature_dim, batch_size, epochs, and other hyperparameters`
+4. **Train the Triplet Siamese Network (tSSN)**
+- Open and run the notebook `notebooks/model_training.ipynb`.
+- The training loop will:
+  - Use `tSSN_trainloader.py` for balanced triplet sampling.
+  - Build the model from `Triplet_Siamese_Similarity_Network.py`.
+  - Apply the selected loss from `triplet_loss.py`.
+5. **Evaluate model performance:**
+- Run the notebook `notebooks/final_evaluation.ipynb` to:
+- Compute accuracy, precision, recall, F1-score, ROC-AUC.
+- Compare performance across distance modes and margin values.
+- Visualize ROC curves and embedding spaces.
+6. **Analyze and interpret results:**
+- Evaluation results will be printed inside the notebook.
+- You can export plots or metrics to `results/` if desired.
+- ROC curves and distance distribution plots can be found in the output cells of `final_evaluation.ipynb`.
+
 ---
 
 ## **Results**
