@@ -77,7 +77,7 @@ Follow the steps below to set up the project:
 1. **Clone the repository**:  
    ```bash
    git clone https://github.com/Tommyhuy1705/Deep_Learning-Based_Signature_Forgery_Detection_for_Personal_Identity_Authentication.git
-   cd your-repo-name
+   cd Deep_Learning-Based_Signature_Forgery_Detection_for_Personal_Identity_Authentication
    ```
 
 2. **Install dependencies**:  
