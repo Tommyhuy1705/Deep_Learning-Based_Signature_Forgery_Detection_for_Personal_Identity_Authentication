@@ -148,6 +148,10 @@ ___
 ---
 
 ## Model Training Notebooks
+### Data set usage
+- BCSD: [View dataset on Kaggle](https://www.kaggle.com/datasets/saifkhichi96/bank-checks-signatures-segmentation-dataset)
+- CEDAR: [View dataset on Kaggle](https://www.kaggle.com/datasets/shreelakshmigp/cedardataset)
+
 ### triplet Siamese Similarity Network (tSSN)
 [View tSSN Training Notebook on Kaggle](https://www.kaggle.com/code/giahuytranviet/triplet-trainmodel)
 >This notebook contains the full training process for the tSSN model, including preprocessing, training.
