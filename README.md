@@ -148,9 +148,9 @@ ___
 ---
 
 ## Model Training Notebooks
-### Data set usage
-- BCSD: [View dataset on Kaggle](https://www.kaggle.com/datasets/saifkhichi96/bank-checks-signatures-segmentation-dataset)
-- CEDAR: [View dataset on Kaggle](https://www.kaggle.com/datasets/shreelakshmigp/cedardataset)
+### Datasets Usage:
+- BCSD: [Use for train YOLO model](https://www.kaggle.com/datasets/saifkhichi96/bank-checks-signatures-segmentation-dataset)
+- CEDAR: [Use for train tSSN model](https://www.kaggle.com/datasets/shreelakshmigp/cedardataset)
 
 ### triplet Siamese Similarity Network (tSSN)
 [View tSSN Training Notebook on Kaggle](https://www.kaggle.com/code/giahuytranviet/triplet-trainmodel)
