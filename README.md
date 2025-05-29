@@ -150,11 +150,11 @@ ___
 ## Model Training Notebooks
 ### triplet Siamese Similarity Network (tSSN)
 [View tSSN Training Notebook on Kaggle](https://www.kaggle.com/code/giahuytranviet/triplet-trainmodel)
->This notebook covers training the YOLOv10 model for object detection, including data loading
+>This notebook contains the full training process for the tSSN model, including preprocessing, training.
 
 ### YOLOv10
 [YOLOv10 Training Notebook on Kaggle](https://www.kaggle.com/code/nguyenthien3001/yolov10-bcsd)
->This notebook demonstrates the full object detection training process using YOLOv10, with data augmentation, training loop, and testing samples.
+>This notebook covers training the YOLOv10 model for object detection, including data loading, training, and inference demo.
 
 ## Notes
 - Models were trained on Kaggle GPU environments.
