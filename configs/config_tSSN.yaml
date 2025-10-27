@@ -8,12 +8,12 @@ model:
   kaggle_handle: giahuytranviet/tSSN-verification-model/pyTorch/default/3
   
 training:
-  batch_size: 32               # Number of images in each batch
-  learning_rate: 0.001         # Optimizer learning rate
+  batch_size: 64               # Number of images in each batch
+  learning_rate: 1e-4         # Optimizer learning rate
   early_stop: 3
   optimizer: adam              # Optimizer usage
-  num_epochs: 100              # Number of train epochs
-  margin: 0.5                  # Margin cho triplet loss (threshold)
+  num_epochs: 50              # Number of train epochs
+  margin: 0.6                  # Margin cho triplet loss (threshold)
   scheduler: cosine            # Add scheduler to gradually reduce learning rate
 
 

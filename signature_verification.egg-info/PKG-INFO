@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: signature_verification
 Version: 0.1.0
-Summary: A project for signature verification using Triplet Siamese Similarity Network
+Summary: A project for signature verification using Meta-Learning
 Author: Dong,Huy,Huong,Nhut,Thien
 Requires-Python: >=3.8
 Requires-Dist: pyyaml
