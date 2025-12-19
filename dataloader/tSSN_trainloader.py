@@ -110,13 +110,9 @@ class SignaturePretrainDataset(Dataset):
 
     def __getitem__(self, idx):
         anchor, pos, neg = self.triplets[idx]
-        try:
-            a_img = self.transform(Image.open(anchor).convert('L'))
-            p_img = self.transform(Image.open(pos).convert('L'))
-            n_img = self.transform(Image.open(neg).convert('L'))
-            return a_img, p_img, n_img
-        except Exception:
-            # Skip bad image
-            return self.__getitem__((idx + 1) % len(self))
+        a_img = self.transform(Image.open(anchor).convert('L'))
+        p_img = self.transform(Image.open(pos).convert('L'))
+        n_img = self.transform(Image.open(neg).convert('L'))
+        return a_img, p_img, n_img
     
     def __len__(self): return len(self.triplets)
