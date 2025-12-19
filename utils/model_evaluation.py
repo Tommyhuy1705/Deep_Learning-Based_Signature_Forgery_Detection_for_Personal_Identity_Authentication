@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
     f1_score, roc_auc_score, roc_curve, auc, confusion_matrix
@@ -127,7 +128,6 @@ def evaluate_meta_model(feature_extractor, metric_generator, test_dataset, devic
 
     with torch.no_grad():
         for batch in tqdm(test_loader, desc="Meta-Testing", leave=False):
-            # --- (Data loading, Embedding Extraction, Metric Generation - SAME AS BEFORE) ---
             support_images = batch['support_images'].squeeze(0).to(device)
             query_images = batch['query_images'].squeeze(0).to(device)
             query_labels = batch['query_labels'].squeeze(0).to(device)
@@ -136,8 +136,14 @@ def evaluate_meta_model(feature_extractor, metric_generator, test_dataset, devic
             k_shot = len(support_images)
             if k_shot == 0: continue
             all_images = torch.cat([support_images, query_images], dim=0)
-            try: all_embeddings = feature_extractor(all_images)
+            try: 
+                # Extract raw features
+                raw_embeddings = feature_extractor(all_images)
+                # L2 Normalize embeddings
+                all_embeddings = F.normalize(raw_embeddings, p=2, dim=1)
+                
             except RuntimeError: continue
+            
             support_embeddings = all_embeddings[:k_shot]
             query_embeddings = all_embeddings[k_shot:]
             if len(query_embeddings) == 0: continue
