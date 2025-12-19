@@ -41,19 +41,21 @@ class MetricGenerator(nn.Module):
         
         # Multi-Layer Perceptron (MLP) for inferring feature importance
         self.inference_network = nn.Sequential(
-            # Projection to latent space
+            # 1. Projection
             nn.Linear(embedding_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
             
-            # Regularization to prevent co-adaptation of neurons
+            # 2. Normalization
+            # LayerNorm works with batch_size=1, whereas BatchNorm crashes.
+            nn.LayerNorm(hidden_dim), 
+            
+            # 3. Activation & Regularization
+            nn.ReLU(),
             nn.Dropout(dropout),
             
-            # Projection back to feature space
+            # 4. Output Projection
             nn.Linear(hidden_dim, embedding_dim),
             
-            # Sigmoid activation ensures weights are in range (0, 1),
-            # representing the relative importance or reliability of each feature.
+            # 5. Range Constraint (0, 1)
             nn.Sigmoid() 
         )
 
