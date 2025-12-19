@@ -4,119 +4,71 @@ import torch.nn.functional as F
 
 class MetricGenerator(nn.Module):
     """
-    Generates a user-specific Mahalanobis matrix (W) from support set embeddings.
+    Adaptive Diagonal Metric Generator (Feature Weighting Network).
 
-    This module implements an Attention mechanism to compute a weighted prototype
-    of the support set, which is then fed into a generator network to produce
-    a tailored, adaptive metric (Mahalanobis matrix W) for that specific user.
+    Research Context:
+    In few-shot signature verification, learning a full Mahalanobis matrix (W) 
+    often leads to overfitting due to the high dimensionality (d=512) relative 
+    to the scarcity of support samples (k=8). 
+    
+    Proposed Solution:
+    This module implements a 'Diagonal Metric Learning' approach. Instead of 
+    modeling correlations between all feature dimensions, it estimates a 
+    feature-wise importance vector (omega). This assumes that the underlying 
+    manifold can be locally approximated by re-scaling the axes of the 
+    hyperspace.
+
+    Mathematical Formulation:
+        Let mu be the prototype of the support set.
+        The weight vector is computed as: omega = sigma(f(mu))
+        The distance metric becomes: d(x, mu)^2 = sum(omega_i * (x_i - mu_i)^2)
+
+    Attributes:
+        embedding_dim (int): Dimensionality of the input feature space (ResNet34 output).
+        hidden_dim (int): Dimensionality of the latent representation in the generator.
     """
-    def __init__(self, embedding_dim, hidden_factor=2, dropout_prob=0.3):
+
+    def __init__(self, embedding_dim=512, hidden_dim=256, dropout=0.3):
         """
-        Initializes the MetricGenerator.
+        Initializes the Feature Weighting Network.
 
         Args:
-            embedding_dim (int): The dimensionality of the input embeddings (e.g., 512).
-            hidden_factor (int): Multiplier for the hidden layer dimension relative to embedding_dim. Defaults to 2.
-            dropout_prob (float): Dropout probability for regularization within the generator network. Defaults to 0.3.
+            embedding_dim (int): Size of the feature vector (default: 512).
+            hidden_dim (int): Size of the hidden layer (default: 256).
+            dropout (float): Dropout rate for regularization (default: 0.3).
         """
-        super().__init__()
-        self.embedding_dim = embedding_dim
-        hidden_dim = embedding_dim * hidden_factor
-
-        # Attention layer to compute weights for the support set samples.
-        # Input: embedding_dim -> Output: 1 (attention score per sample)
-        self.attn = nn.Linear(embedding_dim, 1)
-
-        # A deeper generator network to map the prototype to the matrix parameters.
-        # Input: Prototype vector (embedding_dim)
-        # Output: Flattened W matrix (embedding_dim * embedding_dim)
-        self.generator = nn.Sequential(
+        super(MetricGenerator, self).__init__()
+        
+        # Multi-Layer Perceptron (MLP) for inferring feature importance
+        self.inference_network = nn.Sequential(
+            # Projection to latent space
             nn.Linear(embedding_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Dropout(dropout_prob), # Add dropout for regularization
-            nn.Linear(hidden_dim, hidden_dim), # Added another hidden layer
-            nn.ReLU(),
-            nn.Linear(hidden_dim, embedding_dim * embedding_dim) # Output flattened matrix parameters
+            
+            # Regularization to prevent co-adaptation of neurons
+            nn.Dropout(dropout),
+            
+            # Projection back to feature space
+            nn.Linear(hidden_dim, embedding_dim),
+            
+            # Sigmoid activation ensures weights are in range (0, 1),
+            # representing the relative importance or reliability of each feature.
+            nn.Sigmoid() 
         )
 
-        print(f"Initialized MetricGenerator with Attention. Embedding dim: {embedding_dim}, Hidden dim: {hidden_dim}, Dropout: {dropout_prob}.")
-
-
-    def forward(self, support_embeddings):
+    def forward(self, prototype):
         """
-        Generates the Mahalanobis matrix W for a given support set.
+        Forward pass to generate the adaptive metric weights.
 
         Args:
-            support_embeddings (torch.Tensor): Embeddings of the support set samples.
-                                                Shape: (k_shot, embedding_dim).
+            prototype (Tensor): The centroid of the support set. 
+                                Shape: [Batch_Size, embedding_dim]
 
         Returns:
-            torch.Tensor: The generated Mahalanobis matrix W, ensured to be
-                          symmetric and positive semi-definite (PSD).
-                          Shape: (embedding_dim, embedding_dim).
+            feature_weights (Tensor): The estimated importance vector (omega).
+                                      Shape: [Batch_Size, embedding_dim]
         """
-        # Ensure support_embeddings is not empty
-        k_shot = support_embeddings.shape[0]
-        if k_shot == 0:
-            print("Warning: MetricGenerator received empty support_embeddings. Returning Identity matrix.")
-            # Return identity matrix on the same device
-            return torch.eye(self.embedding_dim, device=support_embeddings.device)
-
-        # --- 1. Compute Weighted Prototype via Attention ---
-        # Calculate attention scores for each support sample
-        # (k_shot, embedding_dim) -> (k_shot, 1)
-        try:
-             attn_scores = self.attn(support_embeddings)
-        except Exception as e:
-             print(f"Error during attention score calculation: {e}. Using mean prototype fallback.")
-             # Fallback to simple mean if attention fails
-             prototype = torch.mean(support_embeddings, dim=0, keepdim=True)
-             # Proceed to matrix generation with mean prototype
-             # (Code block duplicated below for clarity, could be refactored)
-             try:
-                 flat_matrix = self.generator(prototype)
-                 W_raw = flat_matrix.view(self.embedding_dim, self.embedding_dim)
-                 W_sym = (W_raw + W_raw.t()) / 2
-                 epsilon = 1e-6
-                 W_psd = W_sym + (epsilon * torch.eye(self.embedding_dim, device=W_sym.device))
-                 return W_psd
-             except Exception as gen_e:
-                 print(f"Error during generator forward pass after fallback: {gen_e}")
-                 return torch.eye(self.embedding_dim, device=support_embeddings.device) # Final fallback
-
-        # Apply softmax to get normalized attention weights (sum to 1)
-        attn_weights = F.softmax(attn_scores, dim=0) # Shape: (k_shot, 1)
-
-        # Compute the weighted average prototype
-        # Element-wise multiply embeddings by weights: (k_shot, embedding_dim) * (k_shot, 1)
-        # Sum across the k_shot dimension: -> (1, embedding_dim)
-        prototype = torch.sum(support_embeddings * attn_weights, dim=0, keepdim=True)
-
-        # --- 2. Generate Flattened Matrix ---
-        # Pass the calculated prototype through the generator network
-        try:
-             flat_matrix = self.generator(prototype) # Shape: (1, embedding_dim * embedding_dim)
-        except Exception as e:
-             print(f"Error during generator forward pass: {e}")
-             # Fallback to Identity if generator fails
-             return torch.eye(self.embedding_dim, device=support_embeddings.device)
-
-        # --- 3. Reshape into Square Matrix ---
-        try:
-             W_raw = flat_matrix.view(self.embedding_dim, self.embedding_dim)
-        except Exception as e:
-             print(f"DEBUG (MetricGenerator): ERROR during flat_matrix.view: {e}")
-             # Fallback if reshape fails
-             return torch.eye(self.embedding_dim, device=support_embeddings.device)
-
-
-        # --- 4. Ensure W is Symmetric and Positive Semi-Definite (PSD) ---
-        # Enforce Symmetry: W_sym = (W_raw + W_raw^T) / 2
-        W_sym = (W_raw + W_raw.t()) / 2
-
-        # Enforce Positive Semi-Definite (PSD) by adding a small diagonal bias (epsilon * I)
-        # This is a numerically stable method to ensure eigenvalues > 0.
-        epsilon = 1e-6
-        W_psd = W_sym + (epsilon * torch.eye(self.embedding_dim, device=W_sym.device))
-
-        return W_psd
+        # Estimate channel-wise importance
+        feature_weights = self.inference_network(prototype)
+        return feature_weights
