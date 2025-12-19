@@ -1,179 +1,122 @@
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from PIL import Image
 import random
 import os
 import re
-import numpy as np
+import torchvision.transforms as transforms
+try:
+    from utils.helpers import ResizeWithPad
+except ImportError:
+    import sys
+    sys.path.append('..')
+    from utils.helpers import ResizeWithPad
 
 class SignaturePretrainDataset(Dataset):
     """
-    A PyTorch Dataset class for creating (Anchor, Positive, Negative) triplets
-    for pre-training the signature feature extractor using standard Triplet Loss.
-
-    This dataloader samples triplets based on user identity derived from filenames.
+    Dataset for Pre-training with Hard Negative Mining.
     """
-    def __init__(self, org_dir, forg_dir, transform=None):
+    def __init__(self, org_dir, forg_dir, transform=None, user_list=None):
         """
-        Initializes the SignaturePretrainDataset.
-
         Args:
-            org_dir (str): Path to the directory containing genuine signature images.
-                           Filenames are expected to follow a pattern like 'original_USERID_SAMPLENO.png'.
-            forg_dir (str): Path to the directory containing forged signature images.
-                            Filenames are expected to follow a pattern like 'forgeries_USERID_SAMPLENO.png'.
-            transform (callable, optional): torchvision transforms to be applied to the images.
+            user_list (list, optional): List of user IDs (strings) to include. 
+                                        Used to restrict training to Background Set only.
         """
-        # Ensure directories exist
-        if not os.path.isdir(org_dir):
-            raise FileNotFoundError(f"Genuine signatures directory not found: {org_dir}")
-        if not os.path.isdir(forg_dir):
-            raise FileNotFoundError(f"Forged signatures directory not found: {forg_dir}")
+        self.org_images = []
+        self.forg_images = []
+        
+        # Recursively find all images (handles CEDAR/BHSig structures)
+        for root, _, files in os.walk(org_dir):
+            for file in files:
+                if file.lower().endswith(('.png','.tif','.jpg','.jpeg')):
+                     self.org_images.append(os.path.join(root, file))
+        
+        for root, _, files in os.walk(forg_dir):
+            for file in files:
+                 if file.lower().endswith(('.png','.tif','.jpg','.jpeg')):
+                     self.forg_images.append(os.path.join(root, file))
 
-        # Load image paths, filtering for common image extensions
-        supported_extensions = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')
-        self.org_images = sorted([
-            os.path.join(org_dir, f) for f in os.listdir(org_dir)
-            if f.lower().endswith(supported_extensions)
-        ])
-        self.forg_images = sorted([
-            os.path.join(forg_dir, f) for f in os.listdir(forg_dir)
-            if f.lower().endswith(supported_extensions)
-        ])
+        # Filter by user_list if provided (CRITICAL for Splitting)
+        if user_list is not None:
+            self.org_images = [p for p in self.org_images if self._get_user_id(os.path.basename(p)) in user_list]
+            self.forg_images = [p for p in self.forg_images if self._get_user_id(os.path.basename(p)) in user_list]
 
-        if not self.org_images:
-            print(f"Warning: No genuine images found in {org_dir}")
-        if not self.forg_images:
-            print(f"Warning: No forged images found in {forg_dir}")
-
-
-        self.transform = transform
+        if transform is None:
+            self.transform = transforms.Compose([
+                ResizeWithPad((220, 150)),
+                transforms.ToTensor(),
+                transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
+        else:
+            self.transform = transform
+            
         self.triplets = self._create_triplets()
+        print(f"Generated {len(self.triplets)} triplets (Hard Mining enabled).")
 
-        if not self.triplets:
-            print("Warning: No triplets could be generated. Check image paths and filename conventions.")
-        else:
-             print(f"Generated {len(self.triplets)} triplets for pre-training.")
-
-    def _get_user_id_from_filename(self, filename):
-        """Extracts user ID from filename using regex (e.g., '_10_' -> 10)."""
-        # Attempt to find patterns like _USERID_
+    def _get_user_id(self, filename):
+        # Support both CEDAR (_1_) and BHSig (B-S-1-...)
+        # Try BHSig first
+        match = re.search(r'([BH])-[SFG]-(\d+)-', filename, re.IGNORECASE)
+        if match: return f"{match.group(1)}-{int(match.group(2))}"
+        
+        # Try CEDAR
         match = re.search(r'_(\d+)_', filename)
-        if match:
-            return int(match.group(1))
-        else:
-            # Add fallback patterns if needed, e.g., for BHSig filenames B-S-011-G-01.tif
-            match = re.search(r'-(\d+)-', filename)
-            if match:
-                 return int(match.group(1))
-        # print(f"Warning: Could not extract user ID from filename: {filename}")
-        return None # Return None if no ID found
+        if match: return str(int(match.group(1)))
+        
+        return None
 
     def _create_triplets(self):
-        """
-        Generates a list of (anchor, positive, negative) path triplets.
-
-        Logic:
-        - Anchor: A genuine signature.
-        - Positive: Another genuine signature from the same user as the anchor.
-        - Negative: EITHER a forged signature of the anchor's user OR a genuine signature from a different user.
-        """
         triplets = []
-        user_genuine_map = {} # Cache genuine images per user
+        user_genuine_map = {}
 
-        # Group genuine images by user ID
+        # Map User -> List of Genuine Images
         for img_path in self.org_images:
-            filename = os.path.basename(img_path)
-            user_id = self._get_user_id_from_filename(filename)
-            if user_id is not None:
-                if user_id not in user_genuine_map:
-                    user_genuine_map[user_id] = []
-                user_genuine_map[user_id].append(img_path)
-
+            uid = self._get_user_id(os.path.basename(img_path))
+            if uid:
+                if uid not in user_genuine_map: user_genuine_map[uid] = []
+                user_genuine_map[uid].append(img_path)
+        
         all_user_ids = list(user_genuine_map.keys())
-        if not all_user_ids:
-             print("Error: No user IDs could be extracted from genuine filenames.")
-             return []
 
-
-        # Iterate through each genuine image as an anchor
         for anchor_path in self.org_images:
-            anchor_filename = os.path.basename(anchor_path)
-            anchor_user_id = self._get_user_id_from_filename(anchor_filename)
+            anchor_uid = self._get_user_id(os.path.basename(anchor_path))
+            if not anchor_uid: continue
 
-            if anchor_user_id is None:
-                continue # Skip if user ID couldn't be extracted
+            # Positive: Another genuine signature of same user
+            positives = [p for p in user_genuine_map.get(anchor_uid, []) if p != anchor_path]
+            if not positives: continue
+            positive_path = random.choice(positives)
 
-            # --- Find Positive Sample ---
-            # Another genuine signature from the same user, excluding the anchor itself
-            possible_positives = [
-                img for img in user_genuine_map.get(anchor_user_id, [])
-                if img != anchor_path
-            ]
-            if not possible_positives:
-                continue # Skip if no other genuine sample exists for this user
+            # --- HARD NEGATIVE MINING LOGIC ---
+            # 1. Skilled Forgery (Hard Negative): Forgery of THIS user
+            # Find forgeries that match this user ID
+            current_forgeries = [f for f in self.forg_images if self._get_user_id(os.path.basename(f)) == anchor_uid]
+            
+            # 2. Random Negative (Easy Negative): Genuine signature of OTHER user
+            other_uid = random.choice([u for u in all_user_ids if u != anchor_uid])
+            random_negatives = user_genuine_map.get(other_uid, [])
 
-            positive_path = random.choice(possible_positives)
-
-            # --- Find Negative Sample ---
-            possible_negatives = []
-            # Option 1: Forged signature of the same user
-            forged_negatives = [
-                f_img for f_img in self.forg_images
-                if self._get_user_id_from_filename(os.path.basename(f_img)) == anchor_user_id
-            ]
-            possible_negatives.extend(forged_negatives)
-
-            # Option 2: Genuine signature from a different user
-            other_user_ids = [uid for uid in all_user_ids if uid != anchor_user_id]
-            if other_user_ids:
-                 other_user_id = random.choice(other_user_ids)
-                 genuine_negatives = user_genuine_map.get(other_user_id, [])
-                 possible_negatives.extend(genuine_negatives)
-
-
-            if not possible_negatives:
-                continue # Skip if no negative sample can be found
-
-            negative_path = random.choice(possible_negatives)
-
-            triplets.append((anchor_path, positive_path, negative_path))
+            # Probability: 70% pick Hard Negative (if available), 30% pick Easy
+            negative_path = None
+            if current_forgeries and (random.random() < 0.7 or not random_negatives):
+                negative_path = random.choice(current_forgeries)
+            elif random_negatives:
+                negative_path = random.choice(random_negatives)
+            
+            if negative_path:
+                triplets.append((anchor_path, positive_path, negative_path))
 
         return triplets
 
-    def __len__(self):
-        """Returns the total number of triplets generated."""
-        return len(self.triplets)
-
     def __getitem__(self, idx):
-        """
-        Retrieves a triplet of images (anchor, positive, negative) at the given index.
-
-        Args:
-            idx (int): The index of the triplet.
-
-        Returns:
-            tuple: A tuple containing the transformed anchor, positive, and negative image tensors.
-                   Returns None if any image fails to load.
-        """
-        anchor_path, positive_path, negative_path = self.triplets[idx]
-
+        anchor, pos, neg = self.triplets[idx]
         try:
-            # Load images and convert to grayscale ('L')
-            anchor_img = Image.open(anchor_path).convert('L')
-            positive_img = Image.open(positive_path).convert('L')
-            negative_img = Image.open(negative_path).convert('L')
-
-            # Apply transformations if provided
-            if self.transform:
-                anchor_img = self.transform(anchor_img)
-                positive_img = self.transform(positive_img)
-                negative_img = self.transform(negative_img)
-
-            return anchor_img, positive_img, negative_img
-
-        except FileNotFoundError as e:
-            print(f"Error: Image file not found in triplet at index {idx}: {e}. Returning None.")
-            return None # Or handle more gracefully, e.g., skip in DataLoader collate_fn
-        except Exception as e:
-            print(f"Error loading images for triplet at index {idx}: {e}. Returning None.")
-            return None
+            a_img = self.transform(Image.open(anchor).convert('L'))
+            p_img = self.transform(Image.open(pos).convert('L'))
+            n_img = self.transform(Image.open(neg).convert('L'))
+            return a_img, p_img, n_img
+        except Exception:
+            # Skip bad image
+            return self.__getitem__((idx + 1) % len(self))
+    
+    def __len__(self): return len(self.triplets)

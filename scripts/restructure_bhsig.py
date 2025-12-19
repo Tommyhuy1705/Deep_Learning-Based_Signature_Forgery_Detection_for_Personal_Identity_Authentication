@@ -4,175 +4,101 @@ import json
 import random
 import argparse
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from sklearn.model_selection import KFold
 
-def parse_bhsig_filename(filename: str) -> Optional[Tuple[str, int]]:
+def parse_bhsig_filename(filename):
     """
-    Extracts language code ('B' or 'H') and user ID from BHSig-style filenames.
-    Example: 'B-S-001-G-01.tif' -> ('B', 1)  (Handles potential leading zeros)
-             'H-S-042-F-03.tif' -> ('H', 42)
-
-    Args:
-        filename (str): The input filename.
-
-    Returns:
-        Optional[Tuple[str, int]]: A tuple (language_code, user_id), or None if parsing fails.
+    Parses BHSig filename to extract User ID.
+    Format example: 'B-S-001-G-01.tif' -> 'B-1'
     """
-    # Regex updated to capture Language (B or H) and User ID (digits) from filename
-    # Allows for variations like -S-, -G-, -F- and leading zeros in user ID
     match = re.match(r'^([BH])-[SFG]-(\d+)-[GF]-(\d+)\.tif$', filename, re.IGNORECASE)
     if match:
-        language_code = match.group(1).upper() # 'B' or 'H'
-        user_id = int(match.group(2)) # Convert captured digits to integer
-        return language_code, user_id
-    else:
-        # print(f"Warning: Could not parse BHSig filename format: {filename}")
-        return None
+        return f"{match.group(1)}-{int(match.group(2))}" # e.g., 'B-1' or 'H-42'
+    return None
 
-def restructure_nth2165_bhsig(base_dir: str, output_dir: str, num_bengali_test: int = 50, num_hindi_test: int = 30, seed: int = 42):
+def restructure_bhsig_stratified(base_dir, output_dir, pretrain_users_count=150, n_folds=5, seed=42):
     """
-    Scans the 'nth2165/bhsig260-hindi-bengali' dataset based on its specific structure,
-    separates Bengali and Hindi users, and creates two separate JSON files
-    ('bhsig_bengali_meta_test.json', 'bhsig_hindi_meta_test.json')
-    containing absolute paths for randomly selected test users.
-
-    Args:
-        base_dir (str): Path to the root directory of the 'nth2165/bhsig260-hindi-bengali' dataset.
-                        (e.g., '/kaggle/input/bhsig260-hindi-bengali/')
-        output_dir (str): Directory where the restructured JSON split files will be saved.
-        num_bengali_test (int): Number of Bengali users to include in the Bengali test split. Defaults to 50.
-        num_hindi_test (int): Number of Hindi users to include in the Hindi test split. Defaults to 30.
-        seed (int): Random seed for selecting test users. Defaults to 42.
+    Splits BHSig dataset into:
+    1. Background Set (for Pre-training): First 'pretrain_users_count' users.
+    2. Evaluation Set (for Meta-learning): Remaining users, split into K-Folds.
     """
-    print("--- Starting BHSig-260 (nth2165) Dataset Restructuring ---")
+    print("--- Structuring BHSig: Splitting Background (Pretrain) vs Evaluation (Meta-train) ---")
+    
+    # Paths (Assuming standard structure inside BHSig260)
+    # Check if paths exist, handle case sensitivity or slight naming variations if needed
+    sub_dirs = [
+        'BHSig160_Hindi/Genuine', 'BHSig160_Hindi/Forged',
+        'BHSig100_Bengali/Genuine', 'BHSig100_Bengali/Forged'
+    ]
+    
+    user_files = defaultdict(lambda: {'genuine': [], 'forgery': []})
+    
+    for sub in sub_dirs:
+        full_path = os.path.join(base_dir, sub)
+        if not os.path.isdir(full_path):
+            print(f"Warning: Directory not found: {full_path}")
+            continue
+            
+        print(f"Scanning: {full_path}")
+        for f in os.listdir(full_path):
+            if f.lower().endswith(('.tif', '.tiff', '.png')):
+                uid = parse_bhsig_filename(f)
+                if uid:
+                    fpath = os.path.join(full_path, f)
+                    # Determine if Genuine or Forged based on path name
+                    if 'Genuine' in sub: 
+                        user_files[uid]['genuine'].append(fpath)
+                    else: 
+                        user_files[uid]['forgery'].append(fpath)
 
-    # --- Define Source Directories based on the CORRECTED structure ---
-    source_dirs = {
-        'hindi_genuine': os.path.join(base_dir, 'BHSig160_Hindi', 'Genuine'),
-        'hindi_forged': os.path.join(base_dir, 'BHSig160_Hindi', 'Forged'),
-        'bengali_genuine': os.path.join(base_dir, 'BHSig100_Bengali', 'Genuine'),
-        'bengali_forged': os.path.join(base_dir, 'BHSig100_Bengali', 'Forged')
-    }
+    all_users = sorted(list(user_files.keys()))
+    
+    if len(all_users) == 0:
+        print("ERROR: No users found. Check 'base_dir' path.")
+        return
 
-    # --- 1. Validate Input Directories ---
-    all_dirs_exist = True
-    for key, directory in source_dirs.items():
-        if not os.path.isdir(directory):
-            print(f"ERROR: Directory not found: {directory}. Please check the 'base_dir' path.")
-            all_dirs_exist = False
-    if not all_dirs_exist:
-        return # Stop if essential directories are missing
-
-    # --- 2. Collect All Files Grouped by Unique User ID ('B-1', 'H-42', etc.) ---
-    all_files: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: {'genuine': [], 'forgery': []})
-    processed_files_count = 0
-    skipped_files_count = 0
-    supported_extensions = ('.tif', '.tiff') # Dataset uses .tif
-
-    print("Scanning source directories...")
-    for key, directory in source_dirs.items():
-        print(f"  Processing: {directory}")
-        for filename in os.listdir(directory):
-            if filename.lower().endswith(supported_extensions):
-                parsed_info = parse_bhsig_filename(filename)
-                if parsed_info:
-                    lang, user_id = parsed_info
-                    # Create unique ID (e.g., 'B-1', 'H-11') consistent across genuine/forged
-                    unique_user_id = f"{lang}-{user_id}"
-                    full_path = os.path.join(directory, filename)
-
-                    # Add file path to the correct category (genuine/forgery)
-                    if 'genuine' in key:
-                        all_files[unique_user_id]['genuine'].append(full_path)
-                    elif 'forged' in key:
-                        all_files[unique_user_id]['forgery'].append(full_path)
-                    processed_files_count += 1
-                else:
-                    skipped_files_count += 1 # Skip files with unparsable names
-            else:
-                 skipped_files_count += 1 # Skip non-image files
-
-    if not all_files:
-         print("ERROR: No valid BHSig files found or parsed. Cannot create splits.")
-         return
-
-    print(f"Finished scanning. Processed {processed_files_count} files, skipped {skipped_files_count}.")
-    print(f"Found data for {len(all_files)} unique users (Bengali + Hindi).")
-
-    # --- 3. Separate Users by Language and Select Test Subsets ---
-    bengali_users = sorted([uid for uid in all_files if uid.startswith('B-')])
-    hindi_users = sorted([uid for uid in all_files if uid.startswith('H-')])
-
-    print(f"  Available Bengali users: {len(bengali_users)}")
-    print(f"  Available Hindi users: {len(hindi_users)}")
-
-    # Adjust requested numbers if fewer users are available
-    num_bengali_test = min(num_bengali_test, len(bengali_users))
-    num_hindi_test = min(num_hindi_test, len(hindi_users))
-
+    # Shuffle users to mix Hindi and Bengali randomly
     random.seed(seed)
-    random.shuffle(bengali_users)
-    random.shuffle(hindi_users)
-
-    test_bengali_ids = bengali_users[:num_bengali_test]
-    test_hindi_ids = hindi_users[:num_hindi_test]
-
-    print(f"Selected {len(test_bengali_ids)} Bengali users for Bengali test split.")
-    print(f"Selected {len(test_hindi_ids)} Hindi users for Hindi test split.")
-
-    # --- 4. Create and Save Separate JSON Files ---
+    random.shuffle(all_users)
+    
+    # --- SPLIT STRATEGY ---
+    background_users = all_users[:pretrain_users_count]
+    eval_users = all_users[pretrain_users_count:]
+    
+    print(f"Total Users Found: {len(all_users)}")
+    print(f"Background Users (Pre-train): {len(background_users)}")
+    print(f"Evaluation Users (Meta-train): {len(eval_users)}")
+    
     os.makedirs(output_dir, exist_ok=True)
-
-    # Save Bengali Split
-    if test_bengali_ids:
-        bengali_meta_test_data = {uid: all_files[uid] for uid in test_bengali_ids}
-        bengali_split_data = {'meta-test': bengali_meta_test_data}
-        bengali_output_path = os.path.join(output_dir, 'bhsig_bengali_meta_test.json')
-        try:
-            with open(bengali_output_path, 'w', encoding='utf-8') as f:
-                json.dump(bengali_split_data, f, indent=4)
-            print(f"  Successfully saved Bengali meta-test split to: {bengali_output_path}")
-        except Exception as e:
-            print(f"  ERROR saving Bengali split file: {e}")
-    else:
-        print("  No Bengali users selected, skipping Bengali split file generation.")
-
-    # Save Hindi Split
-    if test_hindi_ids:
-        hindi_meta_test_data = {uid: all_files[uid] for uid in test_hindi_ids}
-        hindi_split_data = {'meta-test': hindi_meta_test_data}
-        hindi_output_path = os.path.join(output_dir, 'bhsig_hindi_meta_test.json')
-        try:
-            with open(hindi_output_path, 'w', encoding='utf-8') as f:
-                json.dump(hindi_split_data, f, indent=4)
-            print(f"  Successfully saved Hindi meta-test split to: {hindi_output_path}")
-        except Exception as e:
-            print(f"  ERROR saving Hindi split file: {e}")
-    else:
-        print("  No Hindi users selected, skipping Hindi split file generation.")
-
-    print("--- BHSig-260 Restructuring Complete ---")
+    
+    # 1. Save Background Users List (for Pre-training Dataloader)
+    bg_output = os.path.join(output_dir, 'bhsig_background_users.json')
+    with open(bg_output, 'w') as f:
+        json.dump(background_users, f, indent=4)
+    print(f"Saved Pre-train user list to: {bg_output}")
+        
+    # 2. Create K-Fold Splits for Evaluation Users (Meta-Learning)
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    
+    for fold, (train_idx, val_idx) in enumerate(kf.split(eval_users)):
+        train_uids = [eval_users[i] for i in train_idx]
+        val_uids = [eval_users[i] for i in val_idx]
+        
+        split_data = {
+            'meta-train': {uid: user_files[uid] for uid in train_uids},
+            'meta-test':  {uid: user_files[uid] for uid in val_uids}
+        }
+        
+        out_path = os.path.join(output_dir, f'bhsig_meta_split_fold_{fold}.json')
+        with open(out_path, 'w') as f:
+            json.dump(split_data, f, indent=4)
+        print(f"  Fold {fold}: {len(train_uids)} Train / {len(val_uids)} Val users -> {out_path}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Restructure the 'nth2165/bhsig260-hindi-bengali' dataset "
-                                                 "into separate Bengali and Hindi meta-test JSON files.")
-    parser.add_argument('--base_dir', type=str, required=True,
-                        help="Path to the root directory of the 'nth2165/bhsig260-hindi-bengali' dataset "
-                             "(e.g., /kaggle/input/bhsig260-hindi-bengali).")
-    parser.add_argument('--output_dir', type=str, required=True,
-                        help="Directory to save the output JSON split files (e.g., /kaggle/working/).")
-    parser.add_argument('--num_bengali', type=int, default=50,
-                        help="Number of Bengali users for the Bengali 'meta-test' split.")
-    parser.add_argument('--num_hindi', type=int, default=30,
-                        help="Number of Hindi users for the Hindi 'meta-test' split.")
-    parser.add_argument('--seed', type=int, default=42,
-                        help="Random seed for selecting test users.")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base_dir', type=str, required=True, help="Root path of BHSig dataset")
+    parser.add_argument('--output_dir', type=str, required=True, help="Output folder for JSON splits")
+    parser.add_argument('--pretrain_users', type=int, default=150, help="Number of users for pre-training")
     args = parser.parse_args()
-    restructure_nth2165_bhsig(
-        base_dir=args.base_dir,
-        output_dir=args.output_dir,
-        num_bengali_test=args.num_bengali,
-        num_hindi_test=args.num_hindi,
-        seed=args.seed
-    )
+    
+    restructure_bhsig_stratified(args.base_dir, args.output_dir, args.pretrain_users)

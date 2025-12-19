@@ -4,189 +4,127 @@ import random
 import json
 from PIL import Image
 import os
-from torchvision import transforms
+import torchvision.transforms as transforms
+# IMPORT UTILITY
+try:
+    from utils.helpers import ResizeWithPad
+except ImportError:
+    # Fallback if running locally without proper package structure
+    import sys
+    sys.path.append('..')
+    from utils.helpers import ResizeWithPad
 
 class SignatureEpisodeDataset(Dataset):
     """
-    A PyTorch Dataset class for creating few-shot learning episodes for signature verification.
-
-    Each item retrieved from this dataset represents one "episode" or "task",
-    simulating the scenario of adapting to a new user with limited samples.
-    An episode consists of a support set (known genuine samples) and a query set
-    (samples to be classified, including both genuine and forged).
+    Dataset for Meta-Learning (Few-Shot) episodes.
+    Samples support and query sets ensuring disjoint intersection to prevent data leakage.
     """
-    def __init__(self, split_file_path, base_data_dir, split_name, k_shot=10, n_query_genuine=15, n_query_forgery=15, augment=False, use_full_path=False):
-        """
-        Initializes the SignatureEpisodeDataset.
-
-        Args:
-            split_file_path (str): Path to the JSON file containing user IDs and image paths for the split (e.g., meta-train, meta-test).
-            base_data_dir (str): Root directory of the dataset (e.g., '/kaggle/input/cedar-dataset/signatures'). Used only if use_full_path is False.
-            split_name (str): The name of the split to load ('meta-train' or 'meta-test').
-            k_shot (int): Number of genuine samples in the support set.
-            n_query_genuine (int): Number of genuine samples in the query set.
-            n_query_forgery (int): Number of forgery samples in the query set.
-            augment (bool): Whether to apply data augmentation (RandomAffine) to the images. Should be True for training, False for evaluation.
-            use_full_path (bool): If True, treats paths in the JSON file as absolute paths. If False, joins paths with base_data_dir.
-        """
-        try:
-            with open(split_file_path, 'r') as f:
-                split_content = json.load(f)[split_name]
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Split file not found at: {split_file_path}")
-        except KeyError:
-            raise KeyError(f"Split name '{split_name}' not found in the JSON file.")
-
-        self.data = {}
-        if use_full_path:
-            # Assumes JSON contains absolute paths
-            self.data = split_content
-        else:
-            # Constructs absolute paths by joining base_data_dir
-            if base_data_dir is None:
-                raise ValueError("base_data_dir must be provided when use_full_path is False")
-            for user_id, paths in split_content.items():
-                # Make sure user_id is stored as string consistently
-                str_user_id = str(user_id)
-                self.data[str_user_id] = {
-                    'genuine': [os.path.join(base_data_dir, p) for p in paths['genuine']],
-                    'forgery': [os.path.join(base_data_dir, p) for p in paths['forgery']]
-                }
-
-        # Store user IDs as strings for consistent dictionary access
-        self.user_ids = list(self.data.keys())
+    def __init__(self, split_file_path, base_data_dir, split_name, k_shot=5, n_query_genuine=5, n_query_forgery=5, augment=False, use_full_path=False):
+        
+        with open(split_file_path, 'r') as f:
+            self.split_data = json.load(f)[split_name] # 'meta-train' or 'meta-test'
+            
+        self.user_ids = list(self.split_data.keys())
+        self.base_data_dir = base_data_dir
         self.k_shot = k_shot
         self.n_query_genuine = n_query_genuine
         self.n_query_forgery = n_query_forgery
         self.augment = augment
-        self.length = len(self.user_ids) # Number of users/episodes in this split
+        self.use_full_path = use_full_path
 
-        # Define image transformations
+        # 1. Transform: Use ResizeWithPad to preserve Geometry
         self.base_transform = transforms.Compose([
-            transforms.Resize((220, 150)),
-            transforms.Grayscale(), # Ensure single channel first
-            transforms.ToTensor(), # Converts to [0, 1] range and CxHxW format
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)), # Convert grayscale to 3 channels for ResNet
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) # Normalize to [-1, 1] range
+            ResizeWithPad(target_size=(220, 150)),
+            transforms.Grayscale(),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)), # ResNet expects 3 channels
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
 
-        # Augmentation transform includes random affine transformations
         self.augment_transform = transforms.Compose([
-            transforms.Resize((220, 150)),
+            ResizeWithPad(target_size=(220, 150)),
             transforms.Grayscale(),
-            # Slight random rotations, translations, and scaling
             transforms.RandomAffine(degrees=5, translate=(0.05, 0.05), scale=(0.95, 1.05)),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
 
-        print(f"Initialized SignatureEpisodeDataset for '{split_name}' split.")
-        print(f"  Number of users/episodes: {self.length}")
-        print(f"  k_shot: {self.k_shot}, n_query_genuine: {self.n_query_genuine}, n_query_forgery: {self.n_query_forgery}")
-        print(f"  Augmentation: {'Enabled' if self.augment else 'Disabled'}")
-        print(f"  Using full paths: {use_full_path}")
-
-
     def __len__(self):
-        """Returns the number of episodes (users) in the dataset."""
-        return self.length
+        return len(self.user_ids)
+
+    def _load_images(self, paths, augment=False):
+        images = []
+        valid_paths = []
+        transform = self.augment_transform if augment else self.base_transform
+        
+        for p in paths:
+            # Construct full path if needed
+            full_path = p if self.use_full_path else os.path.join(self.base_data_dir, p)
+            try:
+                img = Image.open(full_path).convert('L')
+                images.append(transform(img))
+                valid_paths.append(full_path)
+            except Exception as e:
+                # print(f"Error loading {full_path}: {e}")
+                continue
+                
+        if not images: return None
+        return torch.stack(images)
 
     def __getitem__(self, index):
-        """
-        Generates a single few-shot learning episode.
-
-        Args:
-            index (int): The index of the user (episode) to retrieve.
-
-        Returns:
-            dict: A dictionary containing the support set images, query set images,
-                  query set labels, and the user ID for the episode. Returns None if
-                  critical errors occur (e.g., unable to load sufficient images).
-        """
         user_id = self.user_ids[index]
-        user_data = self.data[user_id]
+        user_data = self.split_data[user_id]
 
-        genuine_paths = user_data.get('genuine', [])
-        forgery_paths = user_data.get('forgery', [])
+        # Get all available paths
+        genuine_paths = user_data.get('genuine', [])[:] # Copy list
+        forgery_paths = user_data.get('forgery', [])[:] # Copy list
 
-        # --- Handle cases with insufficient samples using resampling ---
+        # --- CRITICAL FIX: DATA LEAKAGE PREVENTION ---
         required_genuine = self.k_shot + self.n_query_genuine
-        if not genuine_paths: # No genuine samples available for this user
-             print(f"Warning: No genuine samples found for user {user_id}. Skipping episode by returning None.")
-             return self.__getitem__((index + 1) % len(self)) # Simplest fix: try next user
-
-
+        
+        # If not enough genuine samples, SKIP this user (Pick next)
         if len(genuine_paths) < required_genuine:
-            # Use random.choices for sampling with replacement
-            genuine_paths = random.choices(genuine_paths, k=required_genuine)
+            return self.__getitem__((index + 1) % len(self))
+            
+        # If forgery requested but not enough, SKIP
+        if self.n_query_forgery > 0 and len(forgery_paths) < self.n_query_forgery:
+             return self.__getitem__((index + 1) % len(self))
 
-        if not forgery_paths: # Handle case with no forgery samples if needed
-            if self.n_query_forgery > 0 and not forgery_paths:
-                print(f"Warning: No forgery samples found for user {user_id}, but {self.n_query_forgery} were requested. Trying next user.")
-                return self.__getitem__((index + 1) % len(self))
-            elif self.n_query_forgery > 0 and len(forgery_paths) < self.n_query_forgery:
-                 forgery_paths = random.choices(forgery_paths, k=self.n_query_forgery)
-            elif self.n_query_forgery == 0: # If 0 forgeries requested, ensure list is empty
-                 forgery_paths = []
-
-
-        # Shuffle paths before splitting to ensure randomness
+        # SHUFFLE (Random sampling without replacement)
         random.shuffle(genuine_paths)
         if forgery_paths: random.shuffle(forgery_paths)
 
-        # Create Support Set (k_shot genuine samples)
+        # SPLIT DISJOINTLY
         support_paths = genuine_paths[:self.k_shot]
-
-        # Create Query Set (n_query genuine + n_query forgery samples)
         query_genuine_paths = genuine_paths[self.k_shot : self.k_shot + self.n_query_genuine]
-        query_forgery_paths = forgery_paths[:self.n_query_forgery] # Slicing handles empty list correctly
+        
+        query_forgery_paths = []
+        if self.n_query_forgery > 0:
+            query_forgery_paths = forgery_paths[:self.n_query_forgery]
 
-        query_paths = query_genuine_paths + query_forgery_paths
-        # Ensure labels match the actual number of samples selected
-        query_labels = [1] * len(query_genuine_paths) + [0] * len(query_forgery_paths)
+        # Load Images
+        support_imgs = self._load_images(support_paths, augment=self.augment)
+        query_imgs_gen = self._load_images(query_genuine_paths, augment=False) # Query never augmented
+        query_imgs_forg = self._load_images(query_forgery_paths, augment=False) if query_forgery_paths else None
 
-        # Select the appropriate transform based on the 'augment' flag
-        transform_to_apply = self.augment_transform if self.augment else self.base_transform
+        # Check for loading errors
+        if support_imgs is None or query_imgs_gen is None:
+             return self.__getitem__((index + 1) % len(self))
+        if self.n_query_forgery > 0 and query_imgs_forg is None:
+             return self.__getitem__((index + 1) % len(self))
 
-        # Helper function to load and transform images, with error handling
-        def _load_images(paths):
-            images = []
-            valid_paths = []
-            for p in paths:
-                try:
-                    img = Image.open(p).convert('L')
-                    images.append(img)
-                    valid_paths.append(p)
-                except FileNotFoundError:
-                    print(f"Error: Image file not found at {p}. Skipping.")
-                except Exception as e:
-                    print(f"Error loading image {p}: {e}. Skipping.")
-
-            if not images:
-                return None
-
-            # Apply transformations
-            try:
-                transformed_images = [transform_to_apply(img) for img in images]
-                return torch.stack(transformed_images)
-            except Exception as e:
-                 print(f"Error applying transforms to images (paths: {valid_paths}): {e}")
-                 return None
-
-
-        support_images = _load_images(support_paths)
-        query_images = _load_images(query_paths)
-
-        # Handle potential loading failures
-        if support_images is None or query_images is None or len(query_images) != len(query_labels):
-            print(f"Critical error loading images for user {user_id}. Attempting next user.")
-            return self.__getitem__((index + 1) % len(self))
-
+        # Combine Query
+        if query_imgs_forg is not None:
+            query_imgs = torch.cat([query_imgs_gen, query_imgs_forg])
+            # Labels: 1 for Genuine, 0 for Forgery
+            query_labels = torch.cat([torch.ones(len(query_imgs_gen)), torch.zeros(len(query_imgs_forg))])
+        else:
+            query_imgs = query_imgs_gen
+            query_labels = torch.ones(len(query_imgs_gen))
 
         return {
-            'support_images': support_images,    # Tensor shape: [k_shot, C, H, W]
-            'query_images': query_images,        # Tensor shape: [n_query_genuine + n_query_forgery, C, H, W]
-            'query_labels': torch.tensor(query_labels, dtype=torch.long), # Tensor shape: [n_query_genuine + n_query_forgery]
-            'user_id': user_id                   # User identifier (string)
+            'support_images': support_imgs,
+            'query_images': query_imgs,
+            'query_labels': query_labels.long()
         }
