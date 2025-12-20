@@ -1,350 +1,241 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
 import torch
 import torch.nn.functional as F
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
 from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score,
-    f1_score, roc_auc_score, roc_curve, auc, confusion_matrix
+    roc_curve, auc, confusion_matrix, 
+    accuracy_score, precision_score, recall_score, f1_score
 )
-from torch.utils.data import DataLoader
 from tqdm.notebook import tqdm
-import os
 
-# Ensure necessary imports from project structure
-# Adjust relative paths if needed
-try:
-    from dataloader.meta_dataloader import SignatureEpisodeDataset
-except ImportError:
-    print("Warning: Could not import SignatureEpisodeDataset. Ensure dataloader path is correct.")
+# Set aesthetic style for all plots
+sns.set_style("whitegrid")
+plt.rcParams.update({'font.size': 11})
 
-def calculate_far_frr_eer(true_labels, distances):
+def compute_metrics(y_true, y_distances):
     """
-    Calculates False Acceptance Rate (FAR), False Rejection Rate (FRR)
-    across a range of thresholds, and determines the Equal Error Rate (EER).
-
+    Computes a comprehensive set of biometric verification metrics.
+    
     Args:
-        true_labels (list or np.array): Aggregated true binary labels (0=Forgery, 1=Genuine).
-        distances (list or np.array): Aggregated raw distances. Lower distance
-                                      indicates higher likelihood of being genuine (class 1).
-
+        y_true (list/array): True labels (1: Genuine, 0: Forgery).
+        y_distances (list/array): Dissimilarity scores (Lower = More similar).
+        
     Returns:
-        tuple: A tuple containing:
-            - float: Equal Error Rate (EER).
-            - float: Threshold at which EER occurs.
-            - np.array: Array of threshold values tested.
-            - np.array: Array of FAR values corresponding to thresholds.
-            - np.array: Array of FRR values corresponding to thresholds.
-            Returns (None, None, None, None, None) if calculation is not possible.
+        dict: Dictionary containing scalar metrics and curve data.
     """
-    true_labels = np.array(true_labels)
-    distances = np.array(distances)
+    y_true = np.array(y_true)
+    y_scores = -np.array(y_distances) # Convert distance to similarity score for ROC
+    
+    # 1. ROC Curve
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores, pos_label=1)
+    fnr = 1 - tpr
+    roc_auc = auc(fpr, tpr)
+    
+    # 2. EER Calculation (Intersection of FAR and FRR)
+    # FAR = FPR, FRR = FNR
+    eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+    eer = fpr[eer_idx]
+    optimal_threshold = -thresholds[eer_idx] # Revert sign back to distance
+    
+    # 3. Binary Classification Metrics at Optimal Threshold
+    # Pred = 1 (Genuine) if distance < threshold
+    y_pred = (np.array(y_distances) < optimal_threshold).astype(int)
+    
+    acc = accuracy_score(y_true, y_pred)
+    prec = precision_score(y_true, y_pred, zero_division=0)
+    rec = recall_score(y_true, y_pred, zero_division=0)
+    f1 = f1_score(y_true, y_pred, zero_division=0)
+    
+    return {
+        'eer': eer,
+        'auc': roc_auc,
+        'threshold': optimal_threshold,
+        'accuracy': acc,
+        'precision': prec,
+        'recall': rec,
+        'f1': f1,
+        'fpr': fpr,
+        'tpr': tpr,
+        'fnr': fnr,
+        'y_true': y_true,
+        'y_pred': y_pred,
+        'scores': y_distances
+    }
 
-    # Ensure finite values
-    finite_mask = np.isfinite(distances)
-    if not np.any(finite_mask):
-        print("Warning: No finite distances found for EER calculation.")
-        return None, None, None, None, None
-
-    true_labels = true_labels[finite_mask]
-    distances = distances[finite_mask]
-
-    if len(np.unique(true_labels)) < 2:
-        print("Warning: EER requires both genuine and forged samples.")
-        return None, None, None, None, None
-    if len(distances) == 0:
-         print("Warning: No valid distances for EER calculation.")
-         return None, None, None, None, None
-
-
-    # Generate thresholds based on sorted unique distances
-    thresholds = np.sort(np.unique(distances))
-    # Add points slightly below min and above max to cover all ranges
-    thresholds = np.concatenate(([thresholds[0] - 1e-6], thresholds, [thresholds[-1] + 1e-6]))
-    # More robust: Generate N thresholds linearly spaced between min and max
-    # min_dist, max_dist = np.min(distances), np.max(distances)
-    # thresholds = np.linspace(min_dist - 1e-6, max_dist + 1e-6, num=500) # Example: 500 thresholds
-
-    far_list = []
-    frr_list = []
-
-    for thresh in thresholds:
-        # Prediction: 1 (Genuine) if distance < threshold, 0 (Forgery) otherwise
-        predictions = (distances < thresh).astype(int)
-
-        # Calculate TP, FP, TN, FN
-        tp = np.sum((predictions == 1) & (true_labels == 1))
-        fp = np.sum((predictions == 1) & (true_labels == 0))
-        tn = np.sum((predictions == 0) & (true_labels == 0))
-        fn = np.sum((predictions == 0) & (true_labels == 1))
-
-        # Calculate FAR and FRR, handle division by zero
-        far = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-        frr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
-
-        far_list.append(far)
-        frr_list.append(frr)
-
-    far_list = np.array(far_list)
-    frr_list = np.array(frr_list)
-
-    # Find the Equal Error Rate (EER)
-    # EER occurs where FAR is approximately equal to FRR
-    # Find the index where the absolute difference |FAR - FRR| is minimal
-    eer_index = np.nanargmin(np.abs(far_list - frr_list))
-    # EER is the value of FAR (or FRR) at this index (or average)
-    eer = (far_list[eer_index] + frr_list[eer_index]) / 2.0
-    eer_threshold = thresholds[eer_index]
-
-    return eer, eer_threshold, thresholds, far_list, frr_list
-
-def evaluate_meta_model(feature_extractor, metric_generator, test_dataset, device):
+def plot_comprehensive_evaluation(results, title_suffix=""):
     """
-    Evaluates the meta-learning model, now returning comprehensive metrics including EER.
+    Generates a 2x2 dashboard of evaluation plots.
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig.suptitle(f'Comprehensive Evaluation Report {title_suffix}', fontsize=16, fontweight='bold')
+    
+    # --- 1. ROC Curve ---
+    axes[0, 0].plot(results['fpr'], results['tpr'], color='darkorange', lw=2, label=f'AUC = {results["auc"]:.4f}')
+    axes[0, 0].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    axes[0, 0].scatter(results['eer'], 1-results['eer'], color='red', label=f'EER = {results["eer"]:.2%}', zorder=5)
+    axes[0, 0].set_xlabel('False Positive Rate (FAR)')
+    axes[0, 0].set_ylabel('True Positive Rate (TAR)')
+    axes[0, 0].set_title('ROC Curve')
+    axes[0, 0].legend(loc="lower right")
+    axes[0, 0].grid(True, linestyle='--', alpha=0.6)
 
-    Args:
-        feature_extractor (torch.nn.Module): The feature extractor model.
-        metric_generator (torch.nn.Module): The metric generator model.
-        test_dataset (Dataset): A SignatureEpisodeDataset instance for meta-testing.
-        device (torch.device): The device (CPU or CUDA).
+    # --- 2. DET Curve (Log Scale) ---
+    # Standard in biometrics: FAR vs FRR
+    clip_min = 1e-4
+    clip_fpr = np.clip(results['fpr'], clip_min, 1.0)
+    clip_fnr = np.clip(results['fnr'], clip_min, 1.0)
+    
+    axes[0, 1].plot(clip_fpr, clip_fnr, color='green', lw=2)
+    axes[0, 1].set_xscale('log')
+    axes[0, 1].set_yscale('log')
+    axes[0, 1].set_xlabel('False Acceptance Rate (FAR)')
+    axes[0, 1].set_ylabel('False Rejection Rate (FRR)')
+    axes[0, 1].set_title('Detection Error Trade-off (DET) Curve')
+    axes[0, 1].grid(True, which="both", linestyle='--', alpha=0.4)
 
-    Returns:
-        tuple: A tuple containing:
-            - dict: Dictionary with metrics: 'accuracy', 'precision', 'recall',
-                    'f1_score', 'roc_auc', 'eer', 'eer_threshold'.
-            - list: Aggregated true labels.
-            - list: Aggregated predictions (based on per-episode optimal threshold).
-            - list: Aggregated raw distances.
+    # --- 3. Distance Distribution ---
+    df = pd.DataFrame({'Distance': results['scores'], 'Label': results['y_true']})
+    df['Type'] = df['Label'].apply(lambda x: 'Genuine Pairs' if x == 1 else 'Forgery Pairs')
+    
+    sns.histplot(data=df, x='Distance', hue='Type', kde=True, ax=axes[1, 0], 
+                 palette={'Genuine Pairs': 'green', 'Forgery Pairs': 'red'}, 
+                 bins=40, alpha=0.5, stat="density", common_norm=False)
+    axes[1, 0].axvline(results['threshold'], color='blue', linestyle='--', lw=2, label=f'Threshold: {results["threshold"]:.3f}')
+    axes[1, 0].set_title('Feature Distance Distribution')
+    axes[1, 0].legend()
+
+    # --- 4. Confusion Matrix ---
+    cm = confusion_matrix(results['y_true'], results['y_pred'])
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1, 1],
+                xticklabels=['Pred: Forged', 'Pred: Genuine'], 
+                yticklabels=['True: Forged', 'True: Genuine'])
+    axes[1, 1].set_title(f'Confusion Matrix (Acc: {results["accuracy"]:.2%})')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
+def visualize_hard_examples(feature_extractor, metric_generator, dataloader, device, threshold, num_examples=3):
+    """
+    Visualizes False Acceptances and False Rejections.
     """
     feature_extractor.eval()
     metric_generator.eval()
-
-    num_workers = os.cpu_count() // 2 if 'kaggle' in os.environ.get('KAGGLE_KERNEL_RUN_TYPE', '') else 0
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
-
-    all_true_labels = []
-    all_predictions = []
-    all_distances = []
-
+    
+    fa_cases = [] # False Accept (Impostor accepted)
+    fr_cases = [] # False Reject (Genuine rejected)
+    
+    print(f"\n{'='*20} QUALITATIVE ERROR ANALYSIS {'='*20}")
+    
     with torch.no_grad():
-        for batch in tqdm(test_loader, desc="Meta-Testing", leave=False):
-            support_images = batch['support_images'].squeeze(0).to(device)
-            query_images = batch['query_images'].squeeze(0).to(device)
-            query_labels = batch['query_labels'].squeeze(0).to(device)
-            user_id = batch.get('user_id', ['N/A'])[0]
-
-            k_shot = len(support_images)
-            if k_shot == 0: continue
-            all_images = torch.cat([support_images, query_images], dim=0)
-            try: 
-                # Extract raw features
-                raw_embeddings = feature_extractor(all_images)
-                # L2 Normalize embeddings
-                all_embeddings = F.normalize(raw_embeddings, p=2, dim=1)
-                
-            except RuntimeError: continue
+        for batch in dataloader:
+            if len(fa_cases) >= num_examples and len(fr_cases) >= num_examples: break
             
-            support_embeddings = all_embeddings[:k_shot]
-            query_embeddings = all_embeddings[k_shot:]
-            if len(query_embeddings) == 0: continue
-            try:
-                W = metric_generator(support_embeddings)
-                prototype_genuine = torch.mean(support_embeddings, dim=0)
-            except RuntimeError: continue
+            supports = batch['support_images'].to(device)
+            queries = batch['query_images'].to(device)
+            labels = batch['query_labels'].to(device)
+            
+            bs = supports.size(0)
+            for i in range(bs):
+                # Inference
+                raw_s = feature_extractor(supports[i])
+                raw_q = feature_extractor(queries[i])
+                s_proto = F.normalize(raw_s, p=2, dim=1).mean(dim=0)
+                q_feat = F.normalize(raw_q, p=2, dim=1)
+                
+                weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
+                dist = torch.sqrt(torch.clamp((weights * (q_feat - s_proto).pow(2)).sum(), min=1e-8)).item()
+                
+                label = labels[i].item() # 1=Gen, 0=Forg
+                pred_is_gen = dist < threshold
+                
+                # Undo normalization for visualization (Approximate)
+                # Invert colors back (Black ink on White bg) if model used inverted inputs
+                def denorm(tensor):
+                    t = tensor.cpu().clone()
+                    # (img * std + mean)
+                    t = t * torch.tensor([0.229, 0.224, 0.225]).view(3,1,1) + torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
+                    # Invert back: 1.0 - x
+                    return (1.0 - t).clamp(0, 1)
 
-            distances_episode = []
-            valid_episode = True
-            for q_embed in query_embeddings:
-                diff = q_embed - prototype_genuine
-                try:
-                    dist = torch.matmul(torch.matmul(diff.unsqueeze(0), W), diff.unsqueeze(1)).item()
-                    if not np.isfinite(dist): dist = torch.linalg.norm(diff).item()
-                    distances_episode.append(dist)
-                except Exception:
-                    dist = torch.linalg.norm(diff).item()
-                    distances_episode.append(dist)
-                    valid_episode = False # Mark if errors occurred
+                if label == 0 and pred_is_gen: # False Accept
+                    if len(fa_cases) < num_examples:
+                        fa_cases.append((denorm(supports[i][0]), denorm(queries[i]), dist))
+                
+                elif label == 1 and not pred_is_gen: # False Reject
+                    if len(fr_cases) < num_examples:
+                        fr_cases.append((denorm(supports[i][0]), denorm(queries[i]), dist))
 
-            if not valid_episode: continue # Skip if distance calc failed badly
-
-            distances_episode = np.array(distances_episode)
-            labels_episode = query_labels.cpu().numpy()
-
-            if distances_episode.size == 0 or labels_episode.size == 0 or distances_episode.size != labels_episode.size: continue
-
-            # --- Find Optimal Threshold FOR THIS EPISODE ---
-            best_acc_episode = -1.0
-            default_thresh = np.median(distances_episode) if len(distances_episode) > 0 else 0.5
-            best_thresh_episode = default_thresh
-            sorted_dists = np.sort(np.unique(distances_episode))
-            threshold_candidates = (sorted_dists[:-1] + sorted_dists[1:]) / 2.0
-            if len(sorted_dists) > 0:
-                 min_dist, max_dist = sorted_dists[0], sorted_dists[-1]
-                 threshold_candidates = np.concatenate(([min_dist - 1e-6], threshold_candidates, [max_dist + 1e-6]))
-            if len(threshold_candidates) == 0: threshold_candidates = [default_thresh]
-            valid_thresholds = [th for th in threshold_candidates if np.isfinite(th)]
-            if not valid_thresholds: valid_thresholds = [default_thresh]
-
-            for thresh in valid_thresholds:
-                preds = (distances_episode < thresh).astype(int)
-                acc = np.mean(preds == labels_episode)
-                if acc > best_acc_episode:
-                    best_acc_episode = acc
-                    best_thresh_episode = thresh
-                elif acc == best_acc_episode:
-                    current_median_diff = abs(best_thresh_episode - default_thresh)
-                    new_median_diff = abs(thresh - default_thresh)
-                    if new_median_diff < current_median_diff: best_thresh_episode = thresh
-
-            # --- Generate Predictions & Aggregate ---
-            final_preds_episode = (distances_episode < best_thresh_episode).astype(int)
-            all_true_labels.extend(labels_episode.tolist())
-            all_predictions.extend(final_preds_episode.tolist())
-            all_distances.extend(distances_episode.tolist())
-
-    # --- Calculate Overall Metrics ---
-    if not all_true_labels or not all_predictions:
-        print("Warning: No valid data aggregated for final metrics calculation.")
-        zero_metrics = {'accuracy': 0.0, 'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0, 'roc_auc': 0.0, 'eer': 1.0, 'eer_threshold': np.nan}
-        return zero_metrics, [], [], []
-
-    # Calculate standard metrics
-    accuracy = accuracy_score(all_true_labels, all_predictions)
-    precision = precision_score(all_true_labels, all_predictions, zero_division=0)
-    recall = recall_score(all_true_labels, all_predictions, zero_division=0)
-    f1 = f1_score(all_true_labels, all_predictions, zero_division=0)
-
-    # Calculate ROC AUC
-    roc_scores = -np.array(all_distances) # Higher score = more likely genuine
-    valid_indices = np.isfinite(roc_scores)
-    roc_auc = 0.0
-    if np.any(valid_indices) and len(np.unique(np.array(all_true_labels)[valid_indices])) > 1:
-        roc_auc = roc_auc_score(np.array(all_true_labels)[valid_indices], roc_scores[valid_indices])
-
-    # Calculate EER
-    eer, eer_threshold, _, _, _ = calculate_far_frr_eer(all_true_labels, all_distances)
-    if eer is None: # Handle case where EER calculation failed
-        eer = 1.0 # Worst case EER
-        eer_threshold = np.nan
-
-    results = {
-        'accuracy': accuracy,
-        'precision': precision,
-        'recall': recall,
-        'f1_score': f1,
-        'roc_auc': roc_auc,
-        'eer': eer,
-        'eer_threshold': eer_threshold
-    }
-
-    return results, all_true_labels, all_predictions, all_distances
-
-def plot_roc_curve(all_true_labels, all_distances, title='Receiver Operating Characteristic (ROC) Curve'):
-    """ Plots the ROC curve and displays the AUC score. """
-    # --- (Implementation unchanged, ensure it uses NEGATIVE distances for scores) ---
-    if not all_true_labels or not all_distances or len(all_true_labels) != len(all_distances):
-        print("Error: Invalid input data for ROC curve plotting.")
-        return
-    if len(np.unique(all_true_labels)) < 2:
-        print("Warning: ROC AUC score is not defined when only one class is present.")
-        # Optionally plot a dummy line or just return
-        plt.figure(figsize=(8, 6))
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='No discrimination')
-        plt.title(title + " (Only one class present)")
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.legend()
+    def plot_row(cases, title):
+        if not cases: return
+        fig, axes = plt.subplots(len(cases), 2, figsize=(8, 3*len(cases)))
+        if len(cases) == 1: axes = [axes] # Handle single case
+        
+        for idx, (supp, query, d) in enumerate(cases):
+            # Select subplots
+            ax_s = axes[idx][0] if len(cases) > 1 else axes[0]
+            ax_q = axes[idx][1] if len(cases) > 1 else axes[1]
+            
+            ax_s.imshow(supp.permute(1, 2, 0).numpy())
+            ax_s.set_title("Reference (Support)")
+            ax_s.axis('off')
+            
+            ax_q.imshow(query.permute(1, 2, 0).numpy())
+            ax_q.set_title(f"Query (Dist: {d:.3f})")
+            ax_q.axis('off')
+            
+        plt.suptitle(title, y=1.02, fontsize=14, color='darkred', fontweight='bold')
+        plt.tight_layout()
         plt.show()
-        return
 
-    roc_scores = -np.array(all_distances)
-    valid_indices = np.isfinite(roc_scores)
-    if not np.all(valid_indices):
-         # print(f"Warning: Removing {np.sum(~valid_indices)} non-finite scores before plotting ROC.") # Reduce verbosity
-         roc_scores = roc_scores[valid_indices]
-         all_true_labels = np.array(all_true_labels)[valid_indices]
+    if fa_cases: plot_row(fa_cases, f"FALSE ACCEPTANCE (Forgery Accepted)\nThreshold: {threshold:.3f}")
+    if fr_cases: plot_row(fr_cases, f"FALSE REJECTION (Genuine Rejected)\nThreshold: {threshold:.3f}")
 
-    if len(np.unique(all_true_labels)) < 2: # Check again after filtering
-        print("Warning: Still only one class present after filtering non-finite scores for ROC.")
-        # Plot dummy line
-        plt.figure(figsize=(8, 6))
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='No discrimination')
-        plt.title(title + " (Only one class after filtering)")
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.legend()
-        plt.show()
-        return
-
-    fpr, tpr, _ = roc_curve(all_true_labels, roc_scores)
-    roc_auc = auc(fpr, tpr)
-
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.4f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate (FAR)')
-    plt.ylabel('True Positive Rate (1 - FRR)')
-    plt.title(title)
-    plt.legend(loc="lower right")
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.show()
-
-
-def plot_confusion_matrix(all_true_labels, all_predictions, class_names=['Forgery (0)', 'Genuine (1)'], title='Confusion Matrix'):
-    """ Plots the confusion matrix using seaborn heatmap. """
-    # --- (Implementation unchanged) ---
-    if not all_true_labels or not all_predictions or len(all_true_labels) != len(all_predictions):
-        print("Error: Invalid input data for confusion matrix plotting.")
-        return
-
-    cm = confusion_matrix(all_true_labels, all_predictions)
-
-    plt.figure(figsize=(7, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names, annot_kws={"size": 14}) # Increase annot size
-    plt.ylabel('Actual Label', fontsize=12)
-    plt.xlabel('Predicted Label', fontsize=12)
-    plt.title(title, fontsize=14)
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10, rotation=0)
-    plt.show()
-
-
-def plot_far_frr_eer(true_labels, distances, title='FAR/FRR vs. Threshold with EER'):
+def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device):
     """
-    Calculates and plots FAR and FRR curves against distance thresholds,
-    highlighting the Equal Error Rate (EER).
-
-    Args:
-        true_labels (list or np.array): Aggregated true binary labels (0=Forgery, 1=Genuine).
-        distances (list or np.array): Aggregated raw distances.
-        title (str): The title for the plot.
+    Main entry point function to be called from Notebook.
     """
-    eer, eer_threshold, thresholds, far_list, frr_list = calculate_far_frr_eer(true_labels, distances)
-
-    if eer is None or thresholds is None:
-        print("Could not calculate or plot FAR/FRR/EER.")
-        return
-
-    plt.figure(figsize=(8, 6))
-    plt.plot(thresholds, far_list, label='FAR (False Acceptance Rate)', color='red')
-    plt.plot(thresholds, frr_list, label='FRR (False Rejection Rate)', color='blue')
-
-    # Mark the EER point
-    plt.plot(eer_threshold, eer, 'o', color='black', markersize=8, label=f'EER ≈ {eer:.4f} at threshold ≈ {eer_threshold:.4f}')
-
-    # Find the intersection point visually more accurately if lines cross cleanly
-    idx = np.argmin(np.abs(far_list - frr_list))
-    plt.plot(thresholds[idx], far_list[idx], 'x', color='green', markersize=10) # Mark intersection point found by argmin
-
-    plt.xlabel('Distance Threshold')
-    plt.ylabel('Error Rate')
-    plt.title(title)
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
-    # Adjust x-axis limits if needed based on threshold range
-    # plt.xlim([min(thresholds)-0.1, max(thresholds)+0.1])
-    plt.ylim([0.0, 1.05]) # Error rates are between 0 and 1
-    plt.show()
+    feature_extractor.eval()
+    metric_generator.eval()
+    all_scores, all_labels = [], []
+    
+    print("Computing distances on Validation Set...")
+    with torch.no_grad():
+        for batch in tqdm(val_loader):
+            supports = batch['support_images'].to(device)
+            queries = batch['query_images'].to(device)
+            labels = batch['query_labels'].to(device)
+            
+            bs = supports.size(0)
+            for i in range(bs):
+                # Inference logic
+                raw_s = feature_extractor(supports[i])
+                raw_q = feature_extractor(queries[i])
+                s_proto = F.normalize(raw_s, p=2, dim=1).mean(dim=0)
+                q_feat = F.normalize(raw_q, p=2, dim=1)
+                
+                weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
+                dist = torch.sqrt(torch.clamp((weights * (q_feat - s_proto).pow(2)).sum(), min=1e-8))
+                
+                all_scores.append(dist.item())
+                all_labels.append(labels[i].item())
+    
+    # Compute Metrics
+    results = compute_metrics(all_labels, all_scores)
+    
+    # Text Report
+    print(f"\n{'='*10} FINAL METRICS {'='*10}")
+    print(f"EER       : {results['eer']:.2%}")
+    print(f"AUC       : {results['auc']:.4f}")
+    print(f"Accuracy  : {results['accuracy']:.2%}")
+    print(f"Precision : {results['precision']:.4f}")
+    print(f"Recall    : {results['recall']:.4f}")
+    print(f"F1-Score  : {results['f1']:.4f}")
+    print(f"Threshold : {results['threshold']:.4f}")
+    
+    # Visualizations
+    plot_comprehensive_evaluation(results)
+    
+    # Return results for further usage
+    return results
