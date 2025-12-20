@@ -42,8 +42,9 @@ class SignaturePretrainDataset(Dataset):
 
         if transform is None:
             self.transform = transforms.Compose([
-                ResizeWithPad((220, 150)),
+                ResizeWithPad(224, fill=255),
                 transforms.ToTensor(),
+                transforms.Lambda(lambda x: 1.0 - x),
                 transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             ])
