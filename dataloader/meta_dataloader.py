@@ -71,9 +71,9 @@ class SignatureEpisodeDataset(Dataset):
         k_shot (int): Number of support samples per class.
     """
 
-    def __init__(self, split_file_path, base_data_dir, split_name, 
+    def __init__(self, split_file_path, base_data_dir, split_name='train', 
                  k_shot=5, n_query_genuine=5, n_query_forgery=5, 
-                 augment=False, use_full_path=False):
+                 target_size=(224, 224), augment=False, use_full_path=False):
         
         # Load JSON Manifest
         try:
@@ -101,23 +101,20 @@ class SignatureEpisodeDataset(Dataset):
 
         # Inference Transformation Pipeline (Deterministic)
         self.transform = transforms.Compose([
-            ResizeWithPad(224, fill=255),          # Resize & Pad White
-            transforms.ToTensor(),                 # [0, 255] -> [0.0, 1.0]
-            transforms.Lambda(lambda x: 1.0 - x),  # Invert: Ink=1.0, Background=0.0
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                                 std=[0.229, 0.224, 0.225])
+            ResizeWithPad(target_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
         # Training Transformation Pipeline (Stochastic)
         if self.augment:
             self.augment_transform = transforms.Compose([
-                ResizeWithPad(224, fill=255),
-                # Geometric perturbations for intra-class variance
-                transforms.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.9, 1.1), fill=255),
+                ResizeWithPad(target_size),
+                transforms.RandomRotation(15),
+                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=10),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
                 transforms.ToTensor(),
-                transforms.Lambda(lambda x: 1.0 - x),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                                     std=[0.229, 0.224, 0.225])
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
 
     def __len__(self):
