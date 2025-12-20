@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import os
 from sklearn.metrics import (
     roc_curve, auc, confusion_matrix, 
     accuracy_score, precision_score, recall_score, f1_score
@@ -17,13 +18,6 @@ plt.rcParams.update({'font.size': 11})
 def compute_metrics(y_true, y_distances):
     """
     Computes a comprehensive set of biometric verification metrics.
-    
-    Args:
-        y_true (list/array): True labels (1: Genuine, 0: Forgery).
-        y_distances (list/array): Dissimilarity scores (Lower = More similar).
-        
-    Returns:
-        dict: Dictionary containing scalar metrics and curve data.
     """
     y_true = np.array(y_true)
     y_scores = -np.array(y_distances) # Convert distance to similarity score for ROC
@@ -34,13 +28,11 @@ def compute_metrics(y_true, y_distances):
     roc_auc = auc(fpr, tpr)
     
     # 2. EER Calculation (Intersection of FAR and FRR)
-    # FAR = FPR, FRR = FNR
     eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
     eer = fpr[eer_idx]
     optimal_threshold = -thresholds[eer_idx] # Revert sign back to distance
     
     # 3. Binary Classification Metrics at Optimal Threshold
-    # Pred = 1 (Genuine) if distance < threshold
     y_pred = (np.array(y_distances) < optimal_threshold).astype(int)
     
     acc = accuracy_score(y_true, y_pred)
@@ -64,7 +56,7 @@ def compute_metrics(y_true, y_distances):
         'scores': y_distances
     }
 
-def plot_comprehensive_evaluation(results, title_suffix=""):
+def plot_comprehensive_evaluation(results, title_suffix="", save_path=None):
     """
     Generates a 2x2 dashboard of evaluation plots.
     """
@@ -82,7 +74,6 @@ def plot_comprehensive_evaluation(results, title_suffix=""):
     axes[0, 0].grid(True, linestyle='--', alpha=0.6)
 
     # --- 2. DET Curve (Log Scale) ---
-    # Standard in biometrics: FAR vs FRR
     clip_min = 1e-4
     clip_fpr = np.clip(results['fpr'], clip_min, 1.0)
     clip_fnr = np.clip(results['fnr'], clip_min, 1.0)
@@ -114,9 +105,14 @@ def plot_comprehensive_evaluation(results, title_suffix=""):
     axes[1, 1].set_title(f'Confusion Matrix (Acc: {results["accuracy"]:.2%})')
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f" > [Saved] Figure saved to: {save_path}")
+        
     plt.show()
 
-def visualize_hard_examples(feature_extractor, metric_generator, dataloader, device, threshold, num_examples=3):
+def visualize_hard_examples(feature_extractor, metric_generator, dataloader, device, threshold, num_examples=3, save_dir=None):
     """
     Visualizes False Acceptances and False Rejections.
     """
@@ -150,13 +146,10 @@ def visualize_hard_examples(feature_extractor, metric_generator, dataloader, dev
                 label = labels[i].item() # 1=Gen, 0=Forg
                 pred_is_gen = dist < threshold
                 
-                # Undo normalization for visualization (Approximate)
-                # Invert colors back (Black ink on White bg) if model used inverted inputs
+                # Undo normalization for visualization
                 def denorm(tensor):
                     t = tensor.cpu().clone()
-                    # (img * std + mean)
                     t = t * torch.tensor([0.229, 0.224, 0.225]).view(3,1,1) + torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
-                    # Invert back: 1.0 - x
                     return (1.0 - t).clamp(0, 1)
 
                 if label == 0 and pred_is_gen: # False Accept
@@ -167,13 +160,12 @@ def visualize_hard_examples(feature_extractor, metric_generator, dataloader, dev
                     if len(fr_cases) < num_examples:
                         fr_cases.append((denorm(supports[i][0]), denorm(queries[i]), dist))
 
-    def plot_row(cases, title):
+    def plot_row(cases, title, filename_suffix):
         if not cases: return
         fig, axes = plt.subplots(len(cases), 2, figsize=(8, 3*len(cases)))
-        if len(cases) == 1: axes = [axes] # Handle single case
+        if len(cases) == 1: axes = [axes] 
         
         for idx, (supp, query, d) in enumerate(cases):
-            # Select subplots
             ax_s = axes[idx][0] if len(cases) > 1 else axes[0]
             ax_q = axes[idx][1] if len(cases) > 1 else axes[1]
             
@@ -187,14 +179,20 @@ def visualize_hard_examples(feature_extractor, metric_generator, dataloader, dev
             
         plt.suptitle(title, y=1.02, fontsize=14, color='darkred', fontweight='bold')
         plt.tight_layout()
+        
+        if save_dir:
+            path = os.path.join(save_dir, f"error_analysis_{filename_suffix}.png")
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f" > [Saved] Error analysis saved to: {path}")
+            
         plt.show()
 
-    if fa_cases: plot_row(fa_cases, f"FALSE ACCEPTANCE (Forgery Accepted)\nThreshold: {threshold:.3f}")
-    if fr_cases: plot_row(fr_cases, f"FALSE REJECTION (Genuine Rejected)\nThreshold: {threshold:.3f}")
+    if fa_cases: plot_row(fa_cases, f"FALSE ACCEPTANCE (Forgery Accepted)\nThreshold: {threshold:.3f}", "false_accept")
+    if fr_cases: plot_row(fr_cases, f"FALSE REJECTION (Genuine Rejected)\nThreshold: {threshold:.3f}", "false_reject")
 
-def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device):
+def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device, save_dir=None):
     """
-    Main entry point function to be called from Notebook.
+    Main entry point function.
     """
     feature_extractor.eval()
     metric_generator.eval()
@@ -209,19 +207,16 @@ def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device):
             
             bs = supports.size(0)
             for i in range(bs):
-                # Inference logic
                 raw_s = feature_extractor(supports[i])
                 raw_q = feature_extractor(queries[i])
                 s_proto = F.normalize(raw_s, p=2, dim=1).mean(dim=0)
                 q_feat = F.normalize(raw_q, p=2, dim=1)
-                
                 weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
                 dist = torch.sqrt(torch.clamp((weights * (q_feat - s_proto).pow(2)).sum(), min=1e-8))
                 
                 all_scores.append(dist.item())
                 all_labels.append(labels[i].item())
     
-    # Compute Metrics
     results = compute_metrics(all_labels, all_scores)
     
     # Text Report
@@ -229,13 +224,13 @@ def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device):
     print(f"EER       : {results['eer']:.2%}")
     print(f"AUC       : {results['auc']:.4f}")
     print(f"Accuracy  : {results['accuracy']:.2%}")
-    print(f"Precision : {results['precision']:.4f}")
-    print(f"Recall    : {results['recall']:.4f}")
-    print(f"F1-Score  : {results['f1']:.4f}")
-    print(f"Threshold : {results['threshold']:.4f}")
     
-    # Visualizations
-    plot_comprehensive_evaluation(results)
+    # Visualization Saving
+    plot_path = None
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        plot_path = os.path.join(save_dir, "evaluation_metrics_dashboard.png")
+        
+    plot_comprehensive_evaluation(results, save_path=plot_path)
     
-    # Return results for further usage
     return results
