@@ -141,10 +141,9 @@ def visualize_hard_examples(feature_extractor, metric_generator, dataloader, dev
                 q_feat = F.normalize(raw_q, p=2, dim=1)
                 
                 weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
-                dist = torch.sqrt(torch.clamp((weights * (q_feat - s_proto).pow(2)).sum(), min=1e-8)).item()
                 
-                label = labels[i].item() # 1=Gen, 0=Forg
-                pred_is_gen = dist < threshold
+                dist_sq = (weights * (q_feat - s_proto).pow(2)).sum(dim=1)
+                dists = torch.sqrt(torch.clamp(dist_sq, min=1e-8))
                 
                 # Undo normalization for visualization
                 def denorm(tensor):
@@ -152,13 +151,21 @@ def visualize_hard_examples(feature_extractor, metric_generator, dataloader, dev
                     t = t * torch.tensor([0.229, 0.224, 0.225]).view(3,1,1) + torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
                     return (1.0 - t).clamp(0, 1)
 
-                if label == 0 and pred_is_gen: # False Accept
-                    if len(fa_cases) < num_examples:
-                        fa_cases.append((denorm(supports[i][0]), denorm(queries[i]), dist))
-                
-                elif label == 1 and not pred_is_gen: # False Reject
-                    if len(fr_cases) < num_examples:
-                        fr_cases.append((denorm(supports[i][0]), denorm(queries[i]), dist))
+                # Iterate through 8 queries in this episode
+                current_labels = labels[i]
+                for k in range(len(current_labels)):
+                    l = current_labels[k].item()
+                    d = dists[k].item()
+                    
+                    pred_is_gen = d < threshold
+                    
+                    if l == 0 and pred_is_gen: # False Accept
+                        if len(fa_cases) < num_examples:
+                            fa_cases.append((denorm(supports[i][0]), denorm(queries[i][k]), d))
+                    
+                    elif l == 1 and not pred_is_gen: # False Reject
+                        if len(fr_cases) < num_examples:
+                            fr_cases.append((denorm(supports[i][0]), denorm(queries[i][k]), d))
 
     def plot_row(cases, title, filename_suffix):
         if not cases: return
@@ -211,11 +218,14 @@ def evaluate_and_plot(feature_extractor, metric_generator, val_loader, device, s
                 raw_q = feature_extractor(queries[i])
                 s_proto = F.normalize(raw_s, p=2, dim=1).mean(dim=0)
                 q_feat = F.normalize(raw_q, p=2, dim=1)
-                weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
-                dist = torch.sqrt(torch.clamp((weights * (q_feat - s_proto).pow(2)).sum(), min=1e-8))
                 
-                all_scores.append(dist.item())
-                all_labels.append(labels[i].item())
+                weights = metric_generator(s_proto.unsqueeze(0)).squeeze(0)
+                
+                dist_sq = (weights * (q_feat - s_proto).pow(2)).sum(dim=1)
+                dists = torch.sqrt(torch.clamp(dist_sq, min=1e-8))
+                
+                all_scores.extend(dists.cpu().numpy())
+                all_labels.extend(labels[i].cpu().numpy())
     
     results = compute_metrics(all_labels, all_scores)
     
