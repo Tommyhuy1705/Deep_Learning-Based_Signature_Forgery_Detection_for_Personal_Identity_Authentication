@@ -4,73 +4,87 @@ import torch.nn.functional as F
 
 class MetricGenerator(nn.Module):
     """
-    Adaptive Diagonal Metric Generator (Feature Weighting Network).
+    Implements a Deep Relation Network for Learnable Metric Similarity in One-Shot Learning.
 
     Research Context:
-    In few-shot signature verification, learning a full Mahalanobis matrix (W) 
-    often leads to overfitting due to the high dimensionality (d=512) relative 
-    to the scarcity of support samples (k=8). 
-    
-    Proposed Solution:
-    This module implements a 'Diagonal Metric Learning' approach. Instead of 
-    modeling correlations between all feature dimensions, it estimates a 
-    feature-wise importance vector (omega). This assumes that the underlying 
-    manifold can be locally approximated by re-scaling the axes of the 
-    hyperspace.
+    Traditional Few-Shot Learning approaches, such as Prototypical Networks, rely on 
+    pre-defined distance metrics (e.g., Euclidean or Cosine distance) in the embedding space. 
+    However, in fine-grained tasks like Offline Signature Verification, the manifold of 
+    genuine signatures versus forgeries is often complex and non-linearly separable.
 
-    Mathematical Formulation:
-        Let mu be the prototype of the support set.
-        The weight vector is computed as: omega = sigma(f(mu))
-        The distance metric becomes: d(x, mu)^2 = sum(omega_i * (x_i - mu_i)^2)
+    This module implements a 'Relation Network' (based on Sung et al., CVPR 2018). 
+    Instead of assuming a fixed metric, it learns a non-linear similarity function 
+    (via a Multi-Layer Perceptron) that takes a pair of feature vectors (Support and Query) 
+    and outputs a learnable relation score. This allows the model to capture subtle 
+    intra-class variations (e.g., slant, stroke width) that rigid metrics might miss.
+
+    Mathematical Formalism:
+        Let f(x_s) and f(x_q) be the feature embeddings of the support and query images, respectively.
+        The Relation Module g(.) computes the similarity score r as:
+            r = g( Concat( f(x_s), f(x_q) ) )
+        
+        The network is trained end-to-end to maximize r for genuine pairs and minimize r for forged pairs.
 
     Attributes:
-        embedding_dim (int): Dimensionality of the input feature space (ResNet34 output).
-        hidden_dim (int): Dimensionality of the latent representation in the generator.
+        embedding_dim (int): Dimensionality of the concatenated input features (Support + Query). 
+                             Typically 2 * Backbone_Output_Dim.
+        hidden_dim (int): Dimensionality of the hidden latent layer.
     """
 
-    def __init__(self, embedding_dim=512, hidden_dim=256, dropout=0.3):
+    def __init__(self, embedding_dim=1024, hidden_dim=256, dropout=0.3):
         """
-        Initializes the Feature Weighting Network.
+        Initializes the Relation Network architecture.
 
         Args:
-            embedding_dim (int): Size of the feature vector (default: 512).
-            hidden_dim (int): Size of the hidden layer (default: 256).
-            dropout (float): Dropout rate for regularization (default: 0.3).
+            embedding_dim (int): The size of the combined feature vector. 
+                                 For ResNet34 backbone (512 dim), this should be 512 + 512 = 1024.
+            hidden_dim (int): The size of the hidden interaction layer. Default: 256.
+            dropout (float): The dropout probability for regularization during training.
         """
         super(MetricGenerator, self).__init__()
         
-        # Multi-Layer Perceptron (MLP) for inferring feature importance
-        self.inference_network = nn.Sequential(
-            # 1. Projection
+        # Deep Relation Module (MLP)
+        self.relation_module = nn.Sequential(
+            # 1. Feature Interaction Layer
+            # Projects the high-dimensional concatenated vector into a latent interaction space.
             nn.Linear(embedding_dim, hidden_dim),
             
-            # 2. Normalization
-            # LayerNorm works with batch_size=1, whereas BatchNorm crashes.
-            nn.LayerNorm(hidden_dim), 
+            # 2. Normalization Strategy
+            # LayerNorm is utilized instead of BatchNorm. In Meta-Learning scenarios (N-way K-shot),
+            # batch sizes are often small or consist of episodic data, making BatchNorm statistics unstable.
+            nn.LayerNorm(hidden_dim),
             
-            # 3. Activation & Regularization
+            # 3. Non-Linear Activation
+            # ReLU introduces non-linearity, enabling the approximation of complex decision boundaries.
             nn.ReLU(),
+            
+            # 4. Regularization
+            # Dropout is applied to prevent the relation module from overfitting to specific artifacts
+            # in the training support sets, thereby improving cross-domain generalization.
             nn.Dropout(dropout),
             
-            # 4. Output Projection
-            nn.Linear(hidden_dim, embedding_dim),
-            
-            # 5. Range Constraint (0, 1)
-            nn.Sigmoid() 
+            # 5. Scalar Scoring Layer
+            # Projects the latent representation to a single scalar relation score (logit).
+            # Note: No Sigmoid activation is applied here as BCEWithLogitsLoss is used 
+            # in the training loop for better numerical stability.
+            nn.Linear(hidden_dim, 1)
         )
 
-    def forward(self, prototype):
+    def forward(self, combined_features):
         """
-        Forward pass to generate the adaptive metric weights.
+        Performs the forward pass to compute the similarity score (relation) between feature pairs.
 
         Args:
-            prototype (Tensor): The centroid of the support set. 
-                                Shape: [Batch_Size, embedding_dim]
+            combined_features (Tensor): The concatenated feature vectors of support and query images.
+                                        Shape: [Batch_Size, embedding_dim]
+                                        (e.g., [32, 1024])
 
         Returns:
-            feature_weights (Tensor): The estimated importance vector (omega).
-                                      Shape: [Batch_Size, embedding_dim]
+            similarity_logits (Tensor): The raw similarity scores (logits) indicating the likelihood 
+                                        that the pair belongs to the same identity.
+                                        Shape: [Batch_Size, 1]
         """
-        # Estimate channel-wise importance
-        feature_weights = self.inference_network(prototype)
-        return feature_weights
+        # Compute the non-linear relation score
+        similarity_logits = self.relation_module(combined_features)
+        
+        return similarity_logits
