@@ -122,7 +122,9 @@ class SignaturePretrainDataset(Dataset):
         # Matches the first sequence of digits found in the filename
         import re
         match = re.search(r'\d+', filename)
-        return match.group(0) if match else "unknown"
+        if match:
+            return str(int(match.group(0))) 
+        return "unknown"
 
     def on_epoch_end(self):
         """
