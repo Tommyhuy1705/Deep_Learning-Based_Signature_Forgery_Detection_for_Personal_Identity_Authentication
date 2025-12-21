@@ -123,7 +123,13 @@ class SignaturePretrainDataset(Dataset):
         import re
         match = re.search(r'\d+', filename)
         if match:
-            return str(int(match.group(0))) 
+            number = str(int(match.group(0)))
+            if 'H-' in filename:
+                return f"H-{number}"
+            elif 'B-' in filename:
+                return f"B-{number}"
+            else:
+                return number
         return "unknown"
 
     def on_epoch_end(self):
