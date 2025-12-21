@@ -45,13 +45,45 @@ class SignatureEpisodeDataset(Dataset):
         self.n_query_forgery = n_query_forgery
         self.augment = augment
         self.use_full_path = use_full_path
+        self.base_data_dir = root_dir if root_dir else ""
+        self.mode = mode
         
         # Load user data from JSON split file
         with open(split_file, 'r') as f:
-            self.data = json.load(f)
-            
+            raw_data = json.load(f)
+        
+        if mode in ['train', 'meta-train']:
+            if 'meta-train' in raw_data:
+                self.data = raw_data['meta-train']
+                print(f" > [Dataset] Loaded subset 'meta-train' with {len(self.data)} users.")
+            elif 'train' in raw_data:
+                self.data = raw_data['train']
+                print(f" > [Dataset] Loaded subset 'train' with {len(self.data)} users.")
+            else:
+                self.data = raw_data
+                print(f" > [Dataset] Loaded flat dataset (Train mode) with {len(self.data)} users.")
+
+        elif mode in ['val', 'test', 'meta-test', 'meta-val']:
+            if 'meta-test' in raw_data:
+                self.data = raw_data['meta-test']
+                print(f" > [Dataset] Loaded subset 'meta-test' with {len(self.data)} users.")
+            elif 'val' in raw_data:
+                self.data = raw_data['val']
+                print(f" > [Dataset] Loaded subset 'val' with {len(self.data)} users.")
+            elif 'test' in raw_data:
+                self.data = raw_data['test']
+                print(f" > [Dataset] Loaded subset 'test' with {len(self.data)} users.")
+            else:
+                self.data = raw_data
+                print(f" > [Dataset] Loaded flat dataset (Val mode) with {len(self.data)} users.")
+        
         self.users = list(self.data.keys())
-        self.base_data_dir = root_dir if root_dir else ""
+        if len(self.users) == 0:
+             raise ValueError(f"Dataset rỗng! Kiểm tra lại file JSON {split_file} và mode {mode}")
+             
+        first_val = self.data[self.users[0]]
+        if not isinstance(first_val, dict):
+             raise ValueError(f"Cấu trúc JSON không hợp lệ. User {self.users[0]} không chứa dict ảnh.")
 
         # =========================================================================
         # TRANSFORMATION PIPELINES (Standardized for ResNet Input: 224x224)
@@ -94,8 +126,14 @@ class SignatureEpisodeDataset(Dataset):
         user_id = self.users[idx]
         user_data = self.data[user_id]
         
-        genuine_paths = user_data['genuine']
-        forgery_paths = user_data['forgeries']
+        gen_key = next((k for k in user_data.keys() if k.lower() == 'genuine'), None)
+        forg_key = next((k for k in user_data.keys() if k.lower() in ['forged', 'forgeries']), None)
+
+        if not gen_key or not forg_key:
+            return self.__getitem__(random.randint(0, len(self.users)-1))
+
+        genuine_paths = user_data[gen_key]
+        forgery_paths = user_data[forg_key]
         
         # --- SAMPLING STRATEGY ---
         
