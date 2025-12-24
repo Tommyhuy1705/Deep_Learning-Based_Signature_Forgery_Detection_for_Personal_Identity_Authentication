@@ -1,179 +1,202 @@
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
-import random
 import os
-import re
-import numpy as np
+import random
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+from torchvision import transforms
+
+# =============================================================================
+# TRANSFORMATION UTILITIES (AUGMENTATION STRATEGY)
+# =============================================================================
+
+def get_pretraining_transforms(input_shape=(224, 224)):
+    """
+    Generates a robust data augmentation pipeline for signature pre-training.
+    
+    This pipeline includes geometric and photometric transformations to induce 
+    invariance to rotation, scale, stroke thickness, and lighting conditions.
+    
+    Args:
+        input_shape (tuple): Target input resolution (H, W). Default is (224, 224) for ResNet.
+        
+    Returns:
+        torchvision.transforms.Compose: The composition of transforms.
+    """
+    return transforms.Compose([
+        # Resize inputs to the standard resolution expected by the backbone (e.g., ResNet34)
+        transforms.Resize(input_shape),
+        
+        # 1. Geometric Invariance: Random Rotation
+        # Signatures are rarely perfectly aligned. +/- 10 degrees simulates natural alignment noise.
+        transforms.RandomRotation(degrees=10),
+        
+        # 2. Stroke & Perspective Invariance: Random Affine
+        # Simulates different pen holding angles and slight distortions.
+        # shear=5 alters the slant of the signature.
+        transforms.RandomAffine(degrees=0, translate=(0.02, 0.02), scale=(0.95, 1.05), shear=5),
+        
+        # 3. Environmental Invariance: Color Jitter
+        # Randomizes brightness, contrast, and saturation to prevent the model from 
+        # relying on specific ink colors or paper whiteness.
+        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+        
+        # 4. Quality Invariance: Gaussian Blur
+        # Simulates low-resolution scanning artifacts or ink bleeding. 
+        # Crucial for Cross-Domain generalization (e.g., matching CEDAR vs BHSig quality).
+        transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.2),
+        
+        # Convert to Tensor (C, H, W) in range [0, 1]
+        transforms.ToTensor(),
+        
+        # Normalize using ImageNet statistics (Mean and Std)
+        # This is mandatory for initializing with pre-trained weights.
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+# =============================================================================
+# DATASET CLASS WITH HARD MINING
+# =============================================================================
 
 class SignaturePretrainDataset(Dataset):
     """
-    A PyTorch Dataset class for creating (Anchor, Positive, Negative) triplets
-    for pre-training the signature feature extractor using standard Triplet Loss.
-
-    This dataloader samples triplets based on user identity derived from filenames.
+    A PyTorch Dataset class for Triplet-based Pre-training with Online Hard Negative Mining.
+    
+    This dataset generates triplets (Anchor, Positive, Negative) dynamically.
+    It prioritizes 'Hard Negatives' (skilled forgeries of the same user) 
+    over 'Easy Negatives' (random signatures from other users) to accelerate convergence.
     """
-    def __init__(self, org_dir, forg_dir, transform=None):
+    
+    def __init__(self, org_dir, forg_dir, transform=None, user_list=None):
         """
-        Initializes the SignaturePretrainDataset.
+        Initializes the dataset by indexing all signature files.
 
         Args:
-            org_dir (str): Path to the directory containing genuine signature images.
-                           Filenames are expected to follow a pattern like 'original_USERID_SAMPLENO.png'.
-            forg_dir (str): Path to the directory containing forged signature images.
-                            Filenames are expected to follow a pattern like 'forgeries_USERID_SAMPLENO.png'.
-            transform (callable, optional): torchvision transforms to be applied to the images.
+            org_dir (str): Path to the directory containing genuine signatures.
+            forg_dir (str): Path to the directory containing forged signatures.
+            transform (callable, optional): Transformations to apply to the images.
+            user_list (list, optional): Filter specific user IDs (used for splitting Train/Val).
         """
-        # Ensure directories exist
-        if not os.path.isdir(org_dir):
-            raise FileNotFoundError(f"Genuine signatures directory not found: {org_dir}")
-        if not os.path.isdir(forg_dir):
-            raise FileNotFoundError(f"Forged signatures directory not found: {forg_dir}")
-
-        # Load image paths, filtering for common image extensions
-        supported_extensions = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')
-        self.org_images = sorted([
-            os.path.join(org_dir, f) for f in os.listdir(org_dir)
-            if f.lower().endswith(supported_extensions)
-        ])
-        self.forg_images = sorted([
-            os.path.join(forg_dir, f) for f in os.listdir(forg_dir)
-            if f.lower().endswith(supported_extensions)
-        ])
-
-        if not self.org_images:
-            print(f"Warning: No genuine images found in {org_dir}")
-        if not self.forg_images:
-            print(f"Warning: No forged images found in {forg_dir}")
-
-
         self.transform = transform
-        self.triplets = self._create_triplets()
+        self.org_images = []
+        self.forg_images = []
+        
+        # --- File Indexing Strategy ---
+        # Recursively search for image files to handle nested directory structures 
+        # (common in BHSig and CEDAR datasets).
+        valid_exts = ('.png', '.tif', '.jpg', '.jpeg')
+        
+        for root, _, files in os.walk(org_dir):
+            for file in files:
+                if file.lower().endswith(valid_exts):
+                     self.org_images.append(os.path.join(root, file))
+        
+        for root, _, files in os.walk(forg_dir):
+            for file in files:
+                 if file.lower().endswith(valid_exts):
+                     self.forg_images.append(os.path.join(root, file))
 
-        if not self.triplets:
-            print("Warning: No triplets could be generated. Check image paths and filename conventions.")
-        else:
-             print(f"Generated {len(self.triplets)} triplets for pre-training.")
+        # --- User Filtering ---
+        if user_list is not None:
+            user_list = set(str(u) for u in user_list)
+            self.org_images = [x for x in self.org_images if self._get_user_id(os.path.basename(x)) in user_list]
+            self.forg_images = [x for x in self.forg_images if self._get_user_id(os.path.basename(x)) in user_list]
+        
+        # Create a mapping: UserID -> List of Genuine Signature Paths
+        self.user_genuine_map = {}
+        for path in self.org_images:
+            uid = self._get_user_id(os.path.basename(path))
+            if uid not in self.user_genuine_map:
+                self.user_genuine_map[uid] = []
+            self.user_genuine_map[uid].append(path)
+            
+        self.users = list(self.user_genuine_map.keys())
+        self.triplets = []
+        self.on_epoch_end() # Initial triplet generation
 
-    def _get_user_id_from_filename(self, filename):
-        """Extracts user ID from filename using regex (e.g., '_10_' -> 10)."""
-        # Attempt to find patterns like _USERID_
-        match = re.search(r'_(\d+)_', filename)
+    def _get_user_id(self, filename):
+        """
+        Extracts User ID from filename. 
+        Assumes format like 'original_1_1.png' or '001_01.png'.
+        Standardizes extraction using Regex.
+        """
+        # Matches the first sequence of digits found in the filename
+        import re
+        match = re.search(r'\d+', filename)
         if match:
-            return int(match.group(1))
-        else:
-            # Add fallback patterns if needed, e.g., for BHSig filenames B-S-011-G-01.tif
-            match = re.search(r'-(\d+)-', filename)
-            if match:
-                 return int(match.group(1))
-        # print(f"Warning: Could not extract user ID from filename: {filename}")
-        return None # Return None if no ID found
+            number = str(int(match.group(0)))
+            if 'H-' in filename:
+                return f"H-{number}"
+            elif 'B-' in filename:
+                return f"B-{number}"
+            else:
+                return number
+        return "unknown"
 
-    def _create_triplets(self):
+    def on_epoch_end(self):
         """
-        Generates a list of (anchor, positive, negative) path triplets.
-
-        Logic:
-        - Anchor: A genuine signature.
-        - Positive: Another genuine signature from the same user as the anchor.
-        - Negative: EITHER a forged signature of the anchor's user OR a genuine signature from a different user.
+        Regenerates triplets at the end of each epoch.
+        This randomizes the pairings to prevent the model from overfitting to specific triplets.
         """
-        triplets = []
-        user_genuine_map = {} # Cache genuine images per user
+        self.triplets = []
+        all_user_ids = list(self.user_genuine_map.keys())
 
-        # Group genuine images by user ID
-        for img_path in self.org_images:
-            filename = os.path.basename(img_path)
-            user_id = self._get_user_id_from_filename(filename)
-            if user_id is not None:
-                if user_id not in user_genuine_map:
-                    user_genuine_map[user_id] = []
-                user_genuine_map[user_id].append(img_path)
-
-        all_user_ids = list(user_genuine_map.keys())
-        if not all_user_ids:
-             print("Error: No user IDs could be extracted from genuine filenames.")
-             return []
-
-
-        # Iterate through each genuine image as an anchor
         for anchor_path in self.org_images:
-            anchor_filename = os.path.basename(anchor_path)
-            anchor_user_id = self._get_user_id_from_filename(anchor_filename)
+            anchor_uid = self._get_user_id(os.path.basename(anchor_path))
+            
+            # 1. Select Positive (Another genuine signature from the same user)
+            positives = self.user_genuine_map.get(anchor_uid, [])
+            # Need at least 2 genuine samples to form a pair
+            if len(positives) < 2: 
+                continue 
+            
+            # Ensure Positive is not the same file as Anchor
+            possible_pos = [p for p in positives if p != anchor_path]
+            if not possible_pos:
+                continue
+            positive_path = random.choice(possible_pos)
 
-            if anchor_user_id is None:
-                continue # Skip if user ID couldn't be extracted
-
-            # --- Find Positive Sample ---
-            # Another genuine signature from the same user, excluding the anchor itself
-            possible_positives = [
-                img for img in user_genuine_map.get(anchor_user_id, [])
-                if img != anchor_path
-            ]
-            if not possible_positives:
-                continue # Skip if no other genuine sample exists for this user
-
-            positive_path = random.choice(possible_positives)
-
-            # --- Find Negative Sample ---
-            possible_negatives = []
-            # Option 1: Forged signature of the same user
-            forged_negatives = [
-                f_img for f_img in self.forg_images
-                if self._get_user_id_from_filename(os.path.basename(f_img)) == anchor_user_id
-            ]
-            possible_negatives.extend(forged_negatives)
-
-            # Option 2: Genuine signature from a different user
-            other_user_ids = [uid for uid in all_user_ids if uid != anchor_user_id]
-            if other_user_ids:
-                 other_user_id = random.choice(other_user_ids)
-                 genuine_negatives = user_genuine_map.get(other_user_id, [])
-                 possible_negatives.extend(genuine_negatives)
-
-
-            if not possible_negatives:
-                continue # Skip if no negative sample can be found
-
-            negative_path = random.choice(possible_negatives)
-
-            triplets.append((anchor_path, positive_path, negative_path))
-
-        return triplets
+            # 2. Select Negative (Hard Mining Logic)
+            # Strategy: 
+            # - Hard Negative: A skilled forgery of the SAME user.
+            # - Easy Negative: A genuine signature of a DIFFERENT user.
+            
+            current_forgeries = [f for f in self.forg_images if self._get_user_id(os.path.basename(f)) == anchor_uid]
+            
+            # Probability threshold: 70% chance to pick a Hard Negative (if available)
+            is_hard_mining = (random.random() < 0.7) and (len(current_forgeries) > 0)
+            
+            if is_hard_mining:
+                negative_path = random.choice(current_forgeries)
+            else:
+                # Pick a random user that is NOT the anchor user
+                other_uid = random.choice([u for u in all_user_ids if u != anchor_uid])
+                negatives_from_other = self.user_genuine_map.get(other_uid, [])
+                if not negatives_from_other: continue
+                negative_path = random.choice(negatives_from_other)
+            
+            self.triplets.append((anchor_path, positive_path, negative_path))
 
     def __len__(self):
-        """Returns the total number of triplets generated."""
         return len(self.triplets)
 
     def __getitem__(self, idx):
         """
-        Retrieves a triplet of images (anchor, positive, negative) at the given index.
-
-        Args:
-            idx (int): The index of the triplet.
-
-        Returns:
-            tuple: A tuple containing the transformed anchor, positive, and negative image tensors.
-                   Returns None if any image fails to load.
+        Retrieves a triplet item.
+        Crucial: Converts images to RGB to match ResNet backbone requirements.
         """
-        anchor_path, positive_path, negative_path = self.triplets[idx]
+        anchor_path, pos_path, neg_path = self.triplets[idx]
+        
+        # Load images
+        # CONVERT TO RGB: This is critical for ResNet (expects 3 channels)
+        anchor_img = Image.open(anchor_path).convert('RGB')
+        pos_img = Image.open(pos_path).convert('RGB')
+        neg_img = Image.open(neg_path).convert('RGB')
 
-        try:
-            # Load images and convert to grayscale ('L')
-            anchor_img = Image.open(anchor_path).convert('L')
-            positive_img = Image.open(positive_path).convert('L')
-            negative_img = Image.open(negative_path).convert('L')
-
-            # Apply transformations if provided
-            if self.transform:
-                anchor_img = self.transform(anchor_img)
-                positive_img = self.transform(positive_img)
-                negative_img = self.transform(negative_img)
-
-            return anchor_img, positive_img, negative_img
-
-        except FileNotFoundError as e:
-            print(f"Error: Image file not found in triplet at index {idx}: {e}. Returning None.")
-            return None # Or handle more gracefully, e.g., skip in DataLoader collate_fn
-        except Exception as e:
-            print(f"Error loading images for triplet at index {idx}: {e}. Returning None.")
-            return None
+        # Apply Transforms (Augmentation)
+        if self.transform:
+            anchor = self.transform(anchor_img)
+            pos = self.transform(pos_img)
+            neg = self.transform(neg_img)
+            
+        # Return Triplet and a dummy label (TripletLoss doesn't use explicit labels)
+        return anchor, pos, neg, torch.tensor([1], dtype=torch.float32)
