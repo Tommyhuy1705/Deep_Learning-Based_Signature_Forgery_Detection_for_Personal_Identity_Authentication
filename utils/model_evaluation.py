@@ -188,18 +188,18 @@ def evaluate_and_plot(feature_extractor, metric_generator, dataloader, device, s
 
 def _plot_roc_curve(results, save_dir, suffix=""):
     plt.figure(figsize=(8, 6))
-    plt.plot(results['fpr'], results['tpr'], lw=2, label=f'ROC (AUC = {results['auc']:.4f})')
+    plt.plot(results['fpr'], results['tpr'], lw=2, label=f"ROC (AUC = {results['auc']:.4f})")
     plt.plot([0, 1], [0, 1], lw=2, linestyle='--')
 
     # Mark EER point
     plt.scatter([results['eer']], [1 - results['eer']], color='red', s=80, zorder=5,
-                label=f'EER = {results['eer']:.2%}')
+                label=f"EER = {results['eer']:.2%}")
 
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate (FAR)')
-    plt.ylabel('True Positive Rate (TAR)')
-    plt.title('Receiver Operating Characteristic (ROC)')
+    plt.xlabel("False Positive Rate (FAR)")
+    plt.ylabel("True Positive Rate (TAR)")
+    plt.title("Receiver Operating Characteristic (ROC)")
     plt.legend(loc='lower right')
     plt.grid(True, alpha=0.3)
 
@@ -220,10 +220,10 @@ def _plot_score_distribution(results, save_dir, suffix=""):
     sns.histplot(gen_scores, label='Genuine', kde=True, stat='density', element='step', alpha=0.6)
     sns.histplot(forg_scores, label='Forged', kde=True, stat='density', element='step', alpha=0.6)
 
-    plt.axvline(x=results['threshold'], linestyle='--', linewidth=2, label=f'Threshold={results['threshold']:.2f}')
-    plt.xlabel('Similarity Score')
-    plt.ylabel('Density')
-    plt.title('Similarity Score Distribution')
+    plt.axvline(x=results['threshold'], linestyle='--', linewidth=2, label=f"Threshold={results['threshold']:.2f}")
+    plt.xlabel("Similarity Score")
+    plt.ylabel("Density")
+    plt.title("Similarity Score Distribution")
     plt.legend()
 
     path = os.path.join(save_dir, f'score_distribution{suffix}.png')
@@ -238,9 +238,9 @@ def _plot_confusion_matrix(results, save_dir, suffix=""):
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
                 xticklabels=['Pred: Forged', 'Pred: Genuine'],
                 yticklabels=['True: Forged', 'True: Genuine'])
-    plt.title(f'Confusion Matrix (Th={results['threshold']:.2f})')
-    plt.ylabel('Actual')
-    plt.xlabel('Predicted')
+    plt.title(f"Confusion Matrix (Th={results['threshold']:.2f})")
+    plt.ylabel("Actual")
+    plt.xlabel("Predicted")
 
     path = os.path.join(save_dir, f'confusion_matrix{suffix}.png')
     plt.savefig(path, bbox_inches='tight')
@@ -266,9 +266,9 @@ def _plot_far_frr(results, save_dir, suffix=""):
     # Mark EER threshold
     plt.plot(results['threshold'], results['eer'], 'ko', label='EER Point')
     plt.axvline(x=results['threshold'], color='k', linestyle='--', alpha=0.4)
-    plt.xlabel('Threshold')
-    plt.ylabel('Rate')
-    plt.title('FAR & FRR vs Threshold')
+    plt.xlabel("Threshold")
+    plt.ylabel("Rate")
+    plt.title("FAR & FRR vs Threshold")
     plt.xlim([0.0, 1.0])
     plt.legend()
 
@@ -287,9 +287,9 @@ def _plot_det_curve(results, save_dir, suffix=""):
     plt.plot(fpr, fnr, linewidth=2)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlabel('False Accept Rate (FAR)')
-    plt.ylabel('False Reject Rate (FRR)')
-    plt.title('DET Curve (log-log)')
+    plt.xlabel("False Accept Rate (FAR)")
+    plt.ylabel("False Reject Rate (FRR)")
+    plt.title("DET Curve (log-log)")
     plt.grid(True, which='both', ls='--', alpha=0.2)
 
     path = os.path.join(save_dir, f'det_curve{suffix}.png')
