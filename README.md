@@ -190,8 +190,8 @@ The combined results validate the effectiveness of the proposed pipeline:
 ---
 
 ## Datasets
--   **CEDAR Dataset**: [Link](https://www.kaggle.com/datasets/shreelakshmigp/cedardataset) - Used for pre-training and K-fold meta-training/validation.
--   **BHSig-260 (Hindi & Bengali)**: [Link](https://www.kaggle.com/datasets/nth2165/bhsig260-hindi-bengali) - Used for cross-dataset generalization evaluation. Requires restructuring using `scripts/restructure_bhsig.py`.
+-   **CEDAR Dataset**: [Link](https://www.kaggle.com/datasets/shreelakshmigp/cedardataset) - Used for cross-dataset generalization evaluation.
+-   **BHSig-260 (Hindi & Bengali)**: [Link](https://www.kaggle.com/datasets/nth2165/bhsig260-hindi-bengali) - Used for pre-training and K-fold meta-training/validation.
 -   **BCSD**: [Link](https://www.kaggle.com/datasets/saifkhichi96/bank-checks-signatures-segmentation-dataset) - Used for optional YOLOv10 training.
 
 ## Contributions
